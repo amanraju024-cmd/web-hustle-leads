@@ -1,0 +1,177 @@
+rules_version = '2';
+
+// AR Methods Leads — who can read and write what.
+//
+// Accounts: an account only gets access once it has a users/{uid} doc with
+// active == true. The owner (OWNER_EMAIL) creates their own admin doc on first
+// sign-in; every other account is created by an admin. Deactivating a user
+// (active = false) cuts off all access immediately.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function ownerEmail() { return 'amanraju024@gmail.com'; }
+    function signedIn() { return request.auth != null; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function profile() { return get(userPath(request.auth.uid)).data; }
+    function isActive() {
+      return signedIn() && exists(userPath(request.auth.uid)) && profile().active == true;
+    }
+    function isAdmin() { return isActive() && profile().role == 'admin'; }
+    function isMe(uid) { return signedIn() && request.auth.uid == uid; }
+    function statuses() { return ['New', 'No answer', 'Call back', 'Interested', 'Not interested', 'Won']; }
+    function callStatuses() { return ['No answer', 'Call back', 'Interested', 'Not interested', 'Won']; }
+    function onlyChanged(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    function shortString(v, max) { return v is string && v.size() <= max; }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if isAdmin() || isMe(uid);
+      // Owner bootstraps their own admin profile
+      allow create: if isMe(uid)
+        && request.auth.token.email == ownerEmail()
+        && request.resource.data.role == 'admin'
+        && request.resource.data.active == true
+        && shortString(request.resource.data.name, 80);
+      // Admin creates workers (or other admins)
+      allow create: if isAdmin()
+        && request.resource.data.role in ['worker', 'admin']
+        && request.resource.data.active is bool
+        && shortString(request.resource.data.name, 80)
+        && shortString(request.resource.data.email, 200);
+      // Admin can rename, change role, (de)activate, but never lock themselves out
+      allow update: if isAdmin()
+        && onlyChanged(['name', 'role', 'active', 'updatedAt'])
+        && request.resource.data.role in ['worker', 'admin']
+        && request.resource.data.active is bool
+        && !(uid == request.auth.uid && (request.resource.data.active == false || request.resource.data.role != 'admin'));
+      allow delete: if false;
+    }
+
+    // ---------- team settings ----------
+    match /settings/{doc} {
+      allow read: if isActive();
+      allow write: if isAdmin()
+        && request.resource.data.dailyGoal is int
+        && request.resource.data.dailyGoal >= 1
+        && request.resource.data.dailyGoal <= 500;
+    }
+
+    // ---------- claims: one per business, readable by everyone so search can show "Taken by" ----------
+    match /claims/{leadId} {
+      allow read: if isActive();
+      // A worker claims a business by creating its claim and lead together.
+      // "create" only succeeds if no claim exists yet, so two people can't both claim it.
+      allow create: if isActive()
+        && request.resource.data.uid == request.auth.uid
+        && shortString(request.resource.data.name, 80)
+        && existsAfter(/databases/$(database)/documents/leads/$(leadId))
+        && getAfter(/databases/$(database)/documents/leads/$(leadId)).data.assignedTo == request.auth.uid;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------- leads ----------
+    match /leads/{leadId} {
+      function claimAfter() { return getAfter(/databases/$(database)/documents/claims/$(leadId)); }
+      function claimedByMeInThisWrite() {
+        return existsAfter(/databases/$(database)/documents/claims/$(leadId))
+          && claimAfter().data.uid == request.auth.uid
+          && !exists(/databases/$(database)/documents/claims/$(leadId));
+      }
+
+      allow read: if isAdmin() || (isActive() && resource.data.assignedTo == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+
+      // Worker claims a brand-new business from search
+      allow create: if isActive()
+        && request.resource.data.assignedTo == request.auth.uid
+        && request.resource.data.status == 'New'
+        && shortString(request.resource.data.name, 200)
+        && claimedByMeInThisWrite();
+
+      // Worker claims an unassigned lead from the pool
+      allow update: if isActive()
+        && resource.data.assignedTo == null
+        && request.resource.data.assignedTo == request.auth.uid
+        && claimedByMeInThisWrite();
+
+      // Worker works their own lead: status, notes, call-back only
+      allow update: if isActive()
+        && resource.data.assignedTo == request.auth.uid
+        && request.resource.data.assignedTo == request.auth.uid
+        && onlyChanged(['status', 'notes', 'callbackAt', 'lastCalledAt', 'updatedAt'])
+        && request.resource.data.status in statuses()
+        && shortString(request.resource.data.notes, 2000);
+    }
+
+    // ---------- call log (source of all stats) ----------
+    match /calls/{callId} {
+      allow read: if isAdmin() || (isActive() && resource.data.uid == request.auth.uid);
+      allow create: if isActive()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status in callStatuses()
+        && request.resource.data.points == 1
+            + (request.resource.data.status == 'Interested' ? 3 : 0)
+            + (request.resource.data.status == 'Won' ? 10 : 0)
+        && shortString(request.resource.data.notes, 2000)
+        && request.resource.data.day is string
+        && request.resource.data.week is string
+        && get(/databases/$(database)/documents/leads/$(request.resource.data.leadId)).data.assignedTo == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // ---------- daily stats per worker (leaderboards) ----------
+    // stats/{day}_{uid}. Each write must add exactly one call that is created in the same batch.
+    match /stats/{statId} {
+      function d() { return request.resource.data; }
+      function newCall() { return getAfter(/databases/$(database)/documents/calls/$(d().lastCallId)).data; }
+      function callIsNewAndMine() {
+        return d().lastCallId is string
+          && !exists(/databases/$(database)/documents/calls/$(d().lastCallId))
+          && existsAfter(/databases/$(database)/documents/calls/$(d().lastCallId))
+          && newCall().uid == request.auth.uid
+          && newCall().day == d().day;
+      }
+      function addsI() { return newCall().status == 'Interested' ? 1 : 0; }
+      function addsW() { return newCall().status == 'Won' ? 1 : 0; }
+      function pointsOk() { return d().points == d().calls + 3 * d().interested + 10 * d().won; }
+
+      allow read: if isActive();
+      allow create: if isActive()
+        && statId == d().day + '_' + request.auth.uid
+        && d().uid == request.auth.uid
+        && shortString(d().name, 80)
+        && d().week is string
+        && callIsNewAndMine()
+        && d().calls == 1 && d().interested == addsI() && d().won == addsW()
+        && pointsOk();
+      allow update: if isActive()
+        && resource.data.uid == request.auth.uid
+        && d().uid == resource.data.uid
+        && d().day == resource.data.day
+        && d().week == resource.data.week
+        && callIsNewAndMine()
+        && d().calls == resource.data.calls + 1
+        && d().interested == resource.data.interested + addsI()
+        && d().won == resource.data.won + addsW()
+        && pointsOk();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- searches and activity feed ----------
+    match /searches/{id} {
+      allow read: if isAdmin() || (isActive() && resource.data.uid == request.auth.uid);
+      allow create: if isActive() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /events/{id} {
+      allow read: if isAdmin();
+      allow create: if isActive()
+        && request.resource.data.uid == request.auth.uid
+        && shortString(request.resource.data.text, 500);
+      allow update, delete: if false;
+    }
+  }
+}
