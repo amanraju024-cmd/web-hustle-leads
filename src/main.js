@@ -275,26 +275,56 @@ function renderBlocked(title, text) {
   $("#out").addEventListener("click", D.logOut);
 }
 
+// Last-known profile + settings, so a returning user sees the app instantly while we re-check
+const BOOT_KEY = (uid) => `arm_boot_${uid}`;
+function readBoot(uid) { try { return JSON.parse(localStorage.getItem(BOOT_KEY(uid)) || "null"); } catch { return null; } }
+function saveBoot(uid, data) { try { localStorage.setItem(BOOT_KEY(uid), JSON.stringify(data)); } catch {} }
+
+function startApp() {
+  renderShell();
+  startCelebrations();
+  route();
+}
+
 D.onAuthStateChanged(D.auth, async (user) => {
   clearListeners();
   state.user = user;
   state.me = null;
   if (!user) return renderAuth();
-  $("#app").innerHTML = `<div class="loading"><span class="spinner"></span>Loading…</div>`;
+  const boot = readBoot(user.uid);
+  if (boot?.me?.active) {
+    // Show the app straight away from the device's copy
+    Object.assign(state, { me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "" });
+    startApp();
+  } else {
+    $("#app").innerHTML = `<div class="loading"><span class="spinner"></span>Loading…</div>`;
+  }
   try {
-    let me = await D.getProfile(user.uid);
+    // Load profile and settings at the same time instead of one after another
+    let [me, team, googleToken] = await Promise.all([
+      D.getProfile(user.uid),
+      D.getTeamSettings().catch(() => null),
+      D.getGoogleToken().catch(() => ""),
+    ]);
     if (!me && user.email?.toLowerCase() === OWNER_EMAIL) {
       await D.createOwnerProfile(user, state.pendingOwnerName || "Aman Raju");
       me = await D.getProfile(user.uid);
+      team = await D.getTeamSettings().catch(() => null);
+      googleToken = await D.getGoogleToken().catch(() => "");
     }
-    if (!me) return renderBlocked("No access yet", "This login hasn't been set up. Ask Aman to create your worker account.");
-    if (!me.active) return renderBlocked("Account turned off", "Your account has been deactivated. Contact Aman if you think this is a mistake.");
-    state.me = me;
-    state.goal = await D.getDailyGoal().catch(() => 30);
-    state.googleToken = await D.getGoogleToken().catch(() => "");
-    renderShell();
-    startCelebrations();
-    route();
+    if (state.user?.uid !== user.uid) return; // signed out meanwhile
+    if (!me || !me.active) {
+      try { localStorage.removeItem(BOOT_KEY(user.uid)); } catch {}
+      clearListeners();
+      state.me = null;
+      return !me ? renderBlocked("No access yet", "This login hasn't been set up. Ask Aman to create your worker account.")
+        : renderBlocked("Account turned off", "Your account has been deactivated. Contact Aman if you think this is a mistake.");
+    }
+    const goal = team?.dailyGoal || 30;
+    const changed = !boot?.me || boot.me.role !== me.role || boot.me.name !== me.name || boot.goal !== goal || boot.googleToken !== googleToken;
+    saveBoot(user.uid, { me, goal, googleToken });
+    Object.assign(state, { me, goal, googleToken });
+    if (!boot?.me?.active || changed) startApp(); // first visit, or something changed: redraw with fresh data
   } catch (e) {
     console.error(e);
     renderBlocked("Couldn't load your account", D.authMessage(e));
@@ -304,6 +334,9 @@ D.onAuthStateChanged(D.auth, async (user) => {
 // =====================================================================
 // Home
 // =====================================================================
+const slimLead = (l) => ({ id: l.id, name: l.name, phone: l.phone, status: l.status, callbackAt: toDate(l.callbackAt)?.getTime() ?? null });
+const slimCall = (c) => ({ status: c.status, value: c.value || 0, day: c.day });
+
 async function screenHome() {
   setTitle("Home");
   const today = perthDay();
@@ -312,7 +345,24 @@ async function screenHome() {
   view().innerHTML = `<h1 class="page">${greet}, ${esc(state.me.name.split(" ")[0])}</h1><div id="homeBody"><div class="loading"><span class="spinner"></span></div></div>`;
   const rid = state.routeId;
   const monthStart = today.slice(0, 8) + "01";
-  const [mine, leads, myCalls] = await Promise.all([D.getStatsFor(state.me.id), D.getLeadsFor(state.me.id), D.getCallsFor(state.me.id).catch(() => [])]);
+  const HOME_KEY = `arm_home_${state.me.id}`;
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(HOME_KEY) || "null"); } catch {}
+  const revive = (l) => ({ ...l, callbackAt: l.callbackAt ? D.Timestamp.fromMillis(l.callbackAt) : null });
+  const load = Promise.all([D.getStatsFor(state.me.id), D.getLeadsFor(state.me.id), D.getCallsFor(state.me.id).catch(() => [])]);
+  let mine, leads, myCalls;
+  if (cached && cached.day === today) {
+    [mine, leads, myCalls] = [cached.mine, cached.leads.map(revive), cached.calls];
+    load.then(([m, l, c]) => {
+      if (rid !== state.routeId) return;
+      const same = JSON.stringify([m.length, l.length, c.length]) === JSON.stringify([mine.length, leads.length, myCalls.length]);
+      try { localStorage.setItem(HOME_KEY, JSON.stringify({ day: today, mine: m, leads: l.map(slimLead), calls: c.map(slimCall) })); } catch {}
+      if (!same) screenHome();
+    }).catch(() => {});
+  } else {
+    [mine, leads, myCalls] = await load;
+    try { localStorage.setItem(HOME_KEY, JSON.stringify({ day: today, mine, leads: leads.map(slimLead), calls: myCalls.map(slimCall) })); } catch {}
+  }
   if (rid !== state.routeId) return;
   const monthWon = myCalls.filter((c) => c.status === "Won" && c.day >= monthStart);
   const earnedMonth = commissionTotal(monthWon);
@@ -359,7 +409,7 @@ async function screenHome() {
         <h2>Badges <span class="muted small">${earnedBadges(totalsFrom(allMine, state.goal, today)).length} / ${BADGES.length}</span></h2>
         <div class="badges">${(() => { const tt = totalsFrom(allMine, state.goal, today); return BADGES.map((b) => {
           const got = b.test(tt);
-          return `<div class="bdg ${got ? "got" : ""}" title="${esc(b.desc)}"><span>${b.icon}</span><b>${esc(b.name)}</b><small>${esc(b.desc)}</small></div>`;
+          return `<div class="bdg ${got ? "got" : ""}"><span>${b.icon}</span><b>${esc(b.name)}</b><small>${esc(b.desc)}</small></div>`;
         }).join(""); })()}</div>
       </section>
       <section class="quick">

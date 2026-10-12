@@ -1,4 +1,5 @@
 node_modules/
 *.log
 .firebase/
-public/app.js
+public/index.html
+public/app-*.js

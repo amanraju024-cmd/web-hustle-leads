@@ -13,6 +13,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AR Leads">
+<!--PRELOAD-->
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@500;700&display=swap">
@@ -352,6 +356,18 @@
     .outcomes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .filters, .grid2 { grid-template-columns: 1fr; }
     .tile b, .goal-head b { font-size: 28px; }
+  }
+  /* phones: drop the heavy GPU effects (blur, frosted glass, fixed layers) */
+  @media (max-width: 760px), (hover: none) {
+    body::before, body::after { position: absolute; height: 100%; }
+    body::after { display: none; }
+    .top, .tabs, .toast, .celebrate, .modal-wrap, .auth-card { backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .top { background: #0d0809; } .tabs { background: #0d0809; }
+    .rise { animation-name: rise-lite; animation-duration: .35s; animation-delay: calc(var(--i, 0) * 30ms); }
+    @keyframes rise-lite { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .card, .tile, .lead, .empty, .quote-card, .tips li { box-shadow: none; }
+    .auth::before, .auth::after { animation: none; filter: none; }
+    .tile:hover, .lead:hover { transform: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
