@@ -2,12 +2,17 @@
 import { normalise, slug } from "./util.js";
 
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
-const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+const OVERPASS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+const OVERPASS_TIMEOUT_MS = 20000;
 const TOMTOM = "https://api.tomtom.com/search/2/poiSearch/";
 
 // Business types: OpenStreetMap tag filters + the words TomTom searches for
 export const TRADES = [
-  { id: "barber", label: "Barber", osm: ['["shop"="hairdresser"]["hairdresser"~"barber|men",i]', '["shop"="barber"]', '["shop"~"hairdresser"]["name"~"barber",i]'], tt: "barber" },
+  { id: "barber", label: "Barber", osm: ['["shop"="hairdresser"]["hairdresser"~"barber|men",i]', '["shop"="barber"]', '["shop"="hairdresser"]["name"~"barber",i]'], tt: "barber" },
   { id: "hair", label: "Hair salon", osm: ['["shop"="hairdresser"]'], tt: "hair salon" },
   { id: "beauty", label: "Beauty salon", osm: ['["shop"="beauty"]', '["shop"="cosmetics"]'], tt: "beauty salon" },
   { id: "nails", label: "Nail salon", osm: ['["shop"="beauty"]["beauty"~"nails",i]', '["shop"="beauty"]["name"~"nail",i]'], tt: "nail salon" },
@@ -53,10 +58,19 @@ export function websiteKind(url) {
 
 export class SearchError extends Error {}
 
-async function getJson(url, opts, what) {
+async function getJson(url, opts, what, timeoutMs = 15000) {
   let res;
-  try { res = await fetch(url, opts); }
-  catch { throw new SearchError(`Couldn't reach ${what}. Check your internet connection.`); }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const outer = opts?.signal;
+  if (outer) outer.addEventListener("abort", () => ctrl.abort(), { once: true });
+  try { res = await fetch(url, { ...opts, signal: ctrl.signal }); }
+  catch (e) {
+    if (outer?.aborted) throw e;
+    if (ctrl.signal.aborted) throw new SearchError(`${what} took too long to answer. Try again.`);
+    throw new SearchError(`Couldn't reach ${what}. Check your internet connection.`);
+  }
+  finally { clearTimeout(timer); }
   if (res.status === 429) throw new SearchError(`${what} is busy right now. Wait a minute and try again.`);
   if (!res.ok) throw new SearchError(`${what} returned an error (${res.status}). Try again in a minute.`);
   try { return await res.json(); }
@@ -65,8 +79,23 @@ async function getJson(url, opts, what) {
 
 const PLACE_TYPES = ["suburb", "town", "city", "village", "quarter", "neighbourhood", "hamlet", "locality", "city_district", "municipality"];
 
+const GEO_CACHE_KEY = "arm_geo_v1";
+const GEO_CACHE_DAYS = 30;
+function readGeoCache() { try { return JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || "{}"); } catch { return {}; } }
+function writeGeoCache(key, geo) {
+  try {
+    const all = readGeoCache();
+    all[key] = { at: Date.now(), geo };
+    const keys = Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(0, 60);
+    localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(Object.fromEntries(keys.map((k) => [k, all[k]]))));
+  } catch { /* storage full or blocked: fine, just slower next time */ }
+}
+
 export async function findSuburb(suburb) {
-  const url = `${NOMINATIM}?format=jsonv2&addressdetails=1&limit=8&countrycodes=au&q=${encodeURIComponent(suburb + ", Western Australia")}`;
+  const key = normalise(suburb);
+  const hit = readGeoCache()[key];
+  if (hit && Date.now() - hit.at < GEO_CACHE_DAYS * 864e5) return hit.geo;
+  const url = `${NOMINATIM}?format=jsonv2&addressdetails=1&limit=8&countrycodes=au&polygon_geojson=1&polygon_threshold=0.0003&q=${encodeURIComponent(suburb + ", Western Australia")}`;
   const results = await getJson(url, {}, "the map service");
   if (!Array.isArray(results) || !results.length) {
     throw new SearchError(`Couldn't find “${suburb}” in WA. Check the spelling.`);
@@ -75,20 +104,37 @@ export async function findSuburb(suburb) {
   const pick = places.find((r) => r.osm_type === "relation") || places[0] || results[0];
   const [s, n, w, e] = (pick.boundingbox || []).map(Number);
   const name = (pick.address && (pick.address.suburb || pick.address.town || pick.address.city || pick.address.village)) || pick.name || suburb;
-  return {
+  const gj = pick.geojson;
+  const polygons = gj?.type === "Polygon" ? [gj.coordinates] : gj?.type === "MultiPolygon" ? gj.coordinates : [];
+  const geo = {
     name,
     lat: Number(pick.lat),
     lon: Number(pick.lon),
     bbox: Number.isFinite(s) ? { s, n, w, e } : null,
-    areaId: pick.osm_type === "relation" ? 3600000000 + Number(pick.osm_id) : null,
+    polygons,
   };
+  writeGeoCache(key, geo);
+  return geo;
+}
+
+/** Point-in-polygon (GeoJSON rings, [lon, lat]); holes are respected. */
+function inRing(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+export function insideSuburb(geo, lat, lon) {
+  if (lat == null || lon == null || !geo.polygons?.length) return null; // unknown
+  return geo.polygons.some(([outer, ...holes]) => inRing(lon, lat, outer) && !holes.some((h) => inRing(lon, lat, h)));
 }
 
 export function buildOverpassQuery(filters, geo) {
-  const scope = geo.areaId ? "(area.a)" : `(${geo.bbox.s},${geo.bbox.w},${geo.bbox.n},${geo.bbox.e})`;
-  const head = geo.areaId ? `area(id:${geo.areaId})->.a;` : "";
-  const parts = filters.map((f) => `nwr${f}${scope};`).join("");
-  return `[out:json][timeout:25];${head}(${parts});out center tags 400;`;
+  const { s, w, n, e } = geo.bbox;
+  const parts = filters.map((f) => `nwr${f};`).join("");
+  return `[out:json][timeout:20][bbox:${s},${w},${n},${e}];(${parts});out center tags 500;`;
 }
 
 function osmToLead(el, geo, trade) {
@@ -112,17 +158,23 @@ function osmToLead(el, geo, trade) {
   };
 }
 
+/** Asks every OpenStreetMap server at once and uses whichever answers first. */
 export async function searchOsm(geo, trade) {
-  if (!geo.areaId && !geo.bbox) return [];
-  const body = new URLSearchParams({ data: buildOverpassQuery(trade.osm, geo) });
-  let lastErr;
-  for (const endpoint of OVERPASS) {
-    try {
-      const data = await getJson(endpoint, { method: "POST", body }, "OpenStreetMap");
-      return (data.elements || []).map((el) => osmToLead(el, geo, trade)).filter(Boolean);
-    } catch (e) { lastErr = e; }
+  if (!geo.bbox) return [];
+  const body = buildOverpassQuery(trade.osm, geo);
+  const ctrl = new AbortController();
+  try {
+    const data = await Promise.any(OVERPASS.map((endpoint) =>
+      getJson(endpoint, { method: "POST", body: new URLSearchParams({ data: body }), signal: ctrl.signal }, "OpenStreetMap", OVERPASS_TIMEOUT_MS)
+        .then((d) => { if (!Array.isArray(d.elements)) throw new SearchError("OpenStreetMap sent back something unexpected."); return d; })));
+    ctrl.abort(); // stop the slower servers
+    return data.elements.map((el) => osmToLead(el, geo, trade)).filter(Boolean)
+      .map((l) => ({ ...l, inside: insideSuburb(geo, l.lat, l.lon) }));
+  } catch (e) {
+    ctrl.abort();
+    const errs = e instanceof AggregateError ? e.errors : [e];
+    throw errs.find((x) => x instanceof SearchError) || new SearchError("OpenStreetMap is busy right now. Try again in a minute.");
   }
-  throw lastErr;
 }
 
 function radiusFor(geo) {
@@ -152,7 +204,7 @@ export async function searchTomTom(geo, trade, key) {
       lon: r.position?.lon ?? null,
       source: "TomTom",
     };
-  }).filter((l) => l.name);
+  }).filter((l) => l.name).map((l) => ({ ...l, inside: insideSuburb(geo, l.lat, l.lon) }));
 }
 
 export function leadKey(lead) { return `${slug(lead.name)}--${slug(lead.suburb)}`.slice(0, 300) || "unnamed"; }
@@ -163,11 +215,12 @@ const KIND_ORDER = { none: 0, social: 1, website: 2 };
 export function mergeLeads(lists, geo, onlySuburb) {
   const merged = new Map();
   for (const lead of lists.flat()) {
-    if (onlySuburb && normalise(lead.suburb) !== normalise(geo.name)) {
-      // OSM results come from inside the suburb boundary already; trust them even if addr:suburb is missing/different
-      if (lead.source !== "OpenStreetMap") continue;
+    if (onlySuburb) {
+      const inside = lead.inside ?? (normalise(lead.suburb) === normalise(geo.name));
+      if (!inside) continue;
       lead.suburb = geo.name;
     }
+    delete lead.inside;
     const id = leadKey(lead);
     const prev = merged.get(id);
     if (!prev) { merged.set(id, { ...lead, id }); continue; }
@@ -179,10 +232,19 @@ export function mergeLeads(lists, geo, onlySuburb) {
     KIND_ORDER[a.websiteKind] - KIND_ORDER[b.websiteKind] || (b.phone ? 1 : 0) - (a.phone ? 1 : 0) || a.name.localeCompare(b.name));
 }
 
-export async function searchBusinesses({ suburb, tradeId, onlySuburb = true, tomtomKey = "" }) {
+const resultCache = new Map(); // same search within 30 minutes is instant
+const RESULT_TTL_MS = 30 * 60 * 1000;
+
+export async function searchBusinesses({ suburb, tradeId, onlySuburb = true, tomtomKey = "", onProgress = () => {} }) {
   const trade = TRADES.find((t) => t.id === tradeId);
   if (!trade) throw new SearchError("Pick a business type.");
+  const cacheKey = [normalise(suburb), tradeId, onlySuburb, !!tomtomKey].join("|");
+  const cached = resultCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < RESULT_TTL_MS) return { ...cached.result, leads: cached.result.leads.map((l) => ({ ...l })), cached: true };
+  onProgress(`Finding ${suburb} on the map…`);
   const geo = await findSuburb(suburb);
+  if (!geo.bbox) throw new SearchError(`Couldn't work out where “${suburb}” is. Try the full suburb name.`);
+  onProgress(`Searching ${trade.label.toLowerCase()} businesses in ${geo.name}…`);
   const jobs = [searchOsm(geo, trade)];
   if (tomtomKey) jobs.push(searchTomTom(geo, trade, tomtomKey));
   const settled = await Promise.allSettled(jobs);
@@ -192,11 +254,13 @@ export async function searchBusinesses({ suburb, tradeId, onlySuburb = true, tom
     else errors.push(`${i === 0 ? "OpenStreetMap" : "TomTom"}: ${r.reason?.message || "failed"}`);
   });
   if (!lists.length) throw new SearchError(errors.join(" "));
-  return {
+  const result = {
     suburb: geo.name,
     trade,
     leads: mergeLeads(lists, geo, onlySuburb),
     counts: { osm: settled[0].status === "fulfilled" ? settled[0].value.length : null, tomtom: tomtomKey ? (settled[1]?.status === "fulfilled" ? settled[1].value.length : null) : undefined },
     errors,
   };
+  if (!errors.length) resultCache.set(cacheKey, { at: Date.now(), result });
+  return result;
 }

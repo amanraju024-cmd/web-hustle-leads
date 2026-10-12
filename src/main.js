@@ -281,12 +281,16 @@ async function runSearch(e) {
   $("#searchMsg").innerHTML = "";
   await busy($("#searchBtn"), "Searching", async () => {
     try {
-      const result = await searchBusinesses({ suburb, tradeId, onlySuburb, tomtomKey: TOMTOM_KEY });
+      const result = await searchBusinesses({
+        suburb, tradeId, onlySuburb, tomtomKey: TOMTOM_KEY,
+        onProgress: (msg) => { if ($("#searchMsg")) $("#searchMsg").innerHTML = `<div class="notice info"><span class="spinner"></span>${esc(msg)}</div>`; },
+      });
+      $("#searchMsg").innerHTML = "";
       state.search = result;
       state.claims = await D.getClaims(result.leads.map((l) => l.id));
       const c = countKinds(result.leads);
       state.filter = c.none ? "none" : c.social ? "social" : "all";
-      D.recordSearch(state.me, result);
+      if (!result.cached) D.recordSearch(state.me, result);
       drawResults();
     } catch (err) {
       console.error(err);
