@@ -84,6 +84,26 @@ export async function getDailyGoal() {
   return snap.exists() ? snap.data().dailyGoal : 30;
 }
 export const setDailyGoal = (n) => setDoc(doc(db, "settings", "team"), { dailyGoal: n });
+export async function getGoogleToken() {
+  const snap = await getDoc(doc(db, "settings", "integrations"));
+  return snap.exists() ? snap.data().apifyToken || "" : "";
+}
+export const setGoogleToken = (token) => setDoc(doc(db, "settings", "integrations"), { apifyToken: token, updatedAt: serverTimestamp() });
+
+/** Shared search results (7 days) so the team doesn't spend credit on the same search twice. */
+export function searchCache(me) {
+  return {
+    async get(key) {
+      const snap = await getDoc(doc(db, "searchCache", key));
+      if (!snap.exists()) return null;
+      const d = snap.data();
+      return { leads: d.leads, at: d.at?.toMillis?.() || 0 };
+    },
+    put(key, leads) {
+      return setDoc(doc(db, "searchCache", key), { uid: me.id, leads: leads.slice(0, 300), at: serverTimestamp() });
+    },
+  };
+}
 
 // ---------- activity ----------
 export function logEvent(me, type, text, extra = {}) {
@@ -116,7 +136,8 @@ function leadDoc(lead, assignedTo, assignedName, createdBy) {
   return {
     name: lead.name, phone: lead.phone || "", address: lead.address || "", suburb: lead.suburb || "",
     category: lead.category || "", website: lead.website || "", websiteKind: lead.websiteKind || "none",
-    maybeSite: lead.maybeSite || "",
+    maybeSite: lead.maybeSite || "", mapsUrl: lead.mapsUrl || "",
+    rating: lead.rating ?? null, reviews: lead.reviews ?? 0,
     source: lead.source || "", lat: lead.lat ?? null, lon: lead.lon ?? null,
     assignedTo, assignedName, status: "New", notes: "", callbackAt: null, lastCalledAt: null,
     createdBy, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),

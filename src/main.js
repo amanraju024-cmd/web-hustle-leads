@@ -1,6 +1,6 @@
 // AR Methods Leads — app shell, routing and screens.
 import * as D from "./data.js";
-import { TRADES, searchBusinesses, SearchError, findHiddenWebsites } from "./search.js";
+import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE } from "./search.js";
 import { OWNER_EMAIL, TOMTOM_KEY } from "./config.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -199,6 +199,7 @@ D.onAuthStateChanged(D.auth, async (user) => {
     if (!me.active) return renderBlocked("Account turned off", "Your account has been deactivated. Contact Aman if you think this is a mistake.");
     state.me = me;
     state.goal = await D.getDailyGoal().catch(() => 30);
+    state.googleToken = await D.getGoogleToken().catch(() => "");
     renderShell();
     route();
   } catch (e) {
@@ -274,7 +275,17 @@ function screenFind() {
       <div><label for="trade">Business type</label>
         <select id="trade">${TRADES.map((t) => `<option value="${t.id}" ${t.id === saved.trade ? "selected" : ""}>${esc(t.label)}</option>`).join("")}</select></div>
       <button class="primary" type="submit" id="searchBtn">Search</button>
-      <label class="check"><input type="checkbox" id="onlySuburb" ${saved.only === false ? "" : "checked"}> Only inside this suburb</label>
+      <div class="search-opts">
+        <label class="check"><input type="checkbox" id="onlySuburb" ${saved.only === false ? "" : "checked"}> Only inside this suburb</label>
+        ${state.googleToken ? `<label class="check">Coverage
+          <select id="coverage" aria-label="Coverage">
+            <option value="quick" ${saved.coverage === "quick" ? "selected" : ""}>Quick (${GOOGLE_COVERAGE.quick})</option>
+            <option value="standard" ${!saved.coverage || saved.coverage === "standard" ? "selected" : ""}>Standard (${GOOGLE_COVERAGE.standard})</option>
+            <option value="thorough" ${saved.coverage === "thorough" ? "selected" : ""}>Thorough (${GOOGLE_COVERAGE.thorough})</option>
+          </select></label>` : ""}
+      </div>
+      <p class="muted small source-line">${state.googleToken ? "Searching <b>Google Maps</b>. Results are shared with the team for 7 days, so repeat searches are free."
+        : isAdmin() ? `Searching OpenStreetMap. <a href="#team">Connect Google Maps</a> for much better results.` : "Searching OpenStreetMap."}</p>
     </form>
     <div id="searchMsg"></div>
     <div id="results"></div>`;
@@ -287,13 +298,14 @@ async function runSearch(e) {
   const suburb = $("#suburb").value.trim();
   const tradeId = $("#trade").value;
   const onlySuburb = $("#onlySuburb").checked;
+  const coverage = $("#coverage")?.value || "standard";
   if (!suburb) return;
-  try { localStorage.setItem("arm_search", JSON.stringify({ suburb, trade: tradeId, only: onlySuburb })); } catch {}
+  try { localStorage.setItem("arm_search", JSON.stringify({ suburb, trade: tradeId, only: onlySuburb, coverage })); } catch {}
   $("#searchMsg").innerHTML = "";
   await busy($("#searchBtn"), "Searching", async () => {
     try {
       const result = await searchBusinesses({
-        suburb, tradeId, onlySuburb, tomtomKey: TOMTOM_KEY,
+        suburb, tradeId, onlySuburb, tomtomKey: TOMTOM_KEY, googleToken: state.googleToken, coverage, cache: D.searchCache(state.me),
         onProgress: (msg) => { if ($("#searchMsg")) $("#searchMsg").innerHTML = `<div class="notice info"><span class="spinner"></span>${esc(msg)}</div>`; },
       });
       $("#searchMsg").innerHTML = "";
@@ -328,7 +340,9 @@ function drawResults() {
   const shown = (state.filter === "all" ? r.leads : r.leads.filter((l) => l.websiteKind === state.filter))
     .slice().sort((a, b) => (a.websiteKind === b.websiteKind ? (a.maybeSite ? 1 : 0) - (b.maybeSite ? 1 : 0) : 0));
   const maybeCount = r.leads.filter((l) => l.maybeSite).length;
-  const sources = [`OpenStreetMap ${r.counts.osm ?? "failed"}`].concat(r.counts.tomtom !== undefined ? [`TomTom ${r.counts.tomtom ?? "failed"}`] : []);
+  const sources = r.source === "google"
+    ? [`Google Maps${r.cached ? " (saved search, no credit used)" : ""}`]
+    : [`OpenStreetMap ${r.counts.osm ?? "failed"}`].concat(r.counts.tomtom !== undefined ? [`TomTom ${r.counts.tomtom ?? "failed"}`] : []);
   $("#results").innerHTML = `
     ${r.errors.length ? `<div class="notice warn">${esc(r.errors.join(" "))}</div>` : ""}
     <div class="chips" role="group" aria-label="Filter results">
@@ -355,7 +369,7 @@ function leadLinks(l) {
   const site = safeUrl(l.website);
   return `
     <a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener">Check Google</a>
-    <a href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Map</a>
+    <a href="${esc(safeUrl(l.mapsUrl) || `https://www.google.com/maps/search/?api=1&query=${q}`)}" target="_blank" rel="noopener">Map</a>
     ${site ? `<a href="${esc(site)}" target="_blank" rel="noopener">${esc(site.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "").slice(0, 40))}</a>` : ""}`;
 }
 
@@ -368,7 +382,7 @@ function resultCard(l) {
     <article class="lead">
       <div class="lead-main">
         <h3>${esc(l.name)} <span class="badge ${l.websiteKind}">${KIND_LABEL[l.websiteKind]}</span></h3>
-        <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}</p>
+        <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}${l.rating ? ` · ★ ${Number(l.rating).toFixed(1)} (${Number(l.reviews) || 0})` : ""}</p>
         <p class="row">${phoneHtml(l.phone)} ${leadLinks(l)}</p>
         ${siteHint(l)}
       </div>
@@ -818,6 +832,14 @@ async function screenTeam() {
       <button class="primary" type="submit">Create login</button>
       <p class="muted small">Send them the email and temporary password. They can change it under Account.</p>
     </form>
+    <form class="card" id="gForm" autocomplete="off">
+      <h2>Google Maps connection</h2>
+      <p class="muted small">${state.googleToken ? "✅ Connected. Searches use Google Maps." : "Not connected. Searches use OpenStreetMap."}
+        Uses a free <a href="https://apify.com" target="_blank" rel="noopener">Apify</a> account (no card): about US$5 of searches free each month. When it runs out, searches fall back to OpenStreetMap until next month.</p>
+      <label for="gToken">Apify API token (Apify → Settings → API &amp; Integrations)</label>
+      <div class="inline wide"><input id="gToken" type="password" placeholder="${state.googleToken ? "Saved. Paste a new one to replace it" : "apify_api_..."}" spellcheck="false">
+        <button class="primary" type="submit">Save</button></div>
+    </form>
     <form class="card" id="goalForm">
       <h2>Daily call goal</h2>
       <div class="inline"><input id="goal" type="number" min="1" max="500" value="${state.goal}" aria-label="Daily call goal"><button class="primary" type="submit">Save</button></div>
@@ -852,6 +874,15 @@ async function screenTeam() {
         e.target.reset();
         drawList();
       } catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+  });
+  $("#gForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const token = $("#gToken").value.trim();
+    if (!/^apify_api_[A-Za-z0-9]{20,}$/.test(token)) return toast("That doesn't look like an Apify token. It starts with apify_api_.", "bad");
+    await busy(e.submitter, "Saving", async () => {
+      try { await D.setGoogleToken(token); state.googleToken = token; toast("Google Maps connected"); screenTeam(); }
+      catch (err) { toast(D.authMessage(err), "bad"); }
     });
   });
   $("#goalForm").addEventListener("submit", async (e) => {

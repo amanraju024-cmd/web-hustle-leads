@@ -9,6 +9,8 @@ const OVERPASS = [
 ];
 const OVERPASS_TIMEOUT_MS = 20000;
 const TOMTOM = "https://api.tomtom.com/search/2/poiSearch/";
+const APIFY_GMAPS = "https://api.apify.com/v2/acts/compass~crawler-google-places/run-sync-get-dataset-items";
+export const GOOGLE_COVERAGE = { quick: 40, standard: 100, thorough: 200 }; // businesses per search
 
 // Business types: OpenStreetMap tag filters + the words TomTom searches for
 export const TRADES = [
@@ -238,6 +240,71 @@ export async function searchTomTom(geo, trade, key) {
   }).filter((l) => l.name).map((l) => ({ ...l, inside: insideSuburb(geo, l.lat, l.lon) }));
 }
 
+// ---------- Google Maps (via Apify's Google Maps Scraper, free monthly credit) ----------
+export class CreditError extends SearchError {}
+
+function googleToLead(p, trade, suburb) {
+  const site = p.website || "";
+  const city = p.city || p.neighborhood || "";
+  return {
+    name: (p.title || "").trim(),
+    ...phoneFields(p.phoneUnformatted || p.phone || ""),
+    address: p.street || "",
+    suburb: city || suburb,
+    category: p.categoryName || trade.label,
+    website: site,
+    websiteKind: websiteKind(site),
+    rating: p.totalScore ?? null,
+    reviews: p.reviewsCount ?? 0,
+    mapsUrl: p.url || "",
+    lat: p.location?.lat ?? null,
+    lon: p.location?.lng ?? null,
+    closed: !!(p.permanentlyClosed || p.temporarilyClosed),
+    fullAddress: p.address || "",
+    source: "Google Maps",
+  };
+}
+
+export async function searchGoogle(suburb, trade, token, maxPlaces) {
+  const body = {
+    searchStringsArray: [trade.tt],
+    locationQuery: `${suburb}, Western Australia, Australia`,
+    maxCrawledPlacesPerSearch: maxPlaces,
+    language: "en",
+    countryCode: "au",
+    skipClosedPlaces: true,
+    scrapePlaceDetailPage: false,
+    maxImages: 0,
+    maxReviews: 0,
+  };
+  let res;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 280000);
+    res = await fetch(`${APIFY_GMAPS}?token=${encodeURIComponent(token)}&timeout=270&format=json&clean=1`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
+  } catch (e) {
+    throw new SearchError(e?.name === "AbortError" ? "Google Maps search took too long. Try Quick coverage." : "Couldn't reach the Google Maps service. Check your internet connection.");
+  }
+  let data = null;
+  try { data = await res.json(); } catch {}
+  if (!res.ok) {
+    const msg = (data && data.error && (data.error.message || data.error.type)) || `error ${res.status}`;
+    if (res.status === 401 || /token|auth/i.test(msg)) throw new SearchError("The Google Maps connection key is wrong. An admin can fix it under Admin → Team.");
+    if (res.status === 402 || /credit|usage|limit|insufficient|exceed/i.test(msg)) throw new CreditError("This month's free Google Maps credit is used up. It resets at the start of next month.");
+    throw new SearchError(`Google Maps search failed (${msg}). Try again.`);
+  }
+  if (!Array.isArray(data)) throw new SearchError("Google Maps sent back something unexpected. Try again.");
+  return data.map((p) => googleToLead(p, trade, suburb)).filter((l) => l.name && !l.closed);
+}
+
+function inSuburbByAddress(lead, suburb) {
+  if (normalise(lead.suburb) === normalise(suburb)) return true;
+  const escaped = suburb.trim().replace(/[.*+?^$()|[\]{}\\]/g, (c) => "\\" + c);
+  return new RegExp("\\b" + escaped + "\\b", "i").test(lead.fullAddress || "");
+}
+
 export function leadKey(lead) { return `${slug(lead.name)}--${slug(lead.suburb)}`.slice(0, 300) || "unnamed"; }
 
 const KIND_ORDER = { none: 0, social: 1, website: 2 };
@@ -267,9 +334,40 @@ export function mergeLeads(lists, geo, onlySuburb) {
 const resultCache = new Map(); // same search within 30 minutes is instant
 const RESULT_TTL_MS = 30 * 60 * 1000;
 
-export async function searchBusinesses({ suburb, tradeId, onlySuburb = true, tomtomKey = "", onProgress = () => {} }) {
+export async function searchBusinesses({ suburb, tradeId, onlySuburb = true, tomtomKey = "", googleToken = "", coverage = "standard",
+  cache = null, onProgress = () => {} }) {
   const trade = TRADES.find((t) => t.id === tradeId);
   if (!trade) throw new SearchError("Pick a business type.");
+  if (googleToken) {
+    const maxPlaces = GOOGLE_COVERAGE[coverage] || GOOGLE_COVERAGE.standard;
+    const key = `g_${normalise(suburb)}_${tradeId}_${maxPlaces}`;
+    let leads = null, fromCache = false;
+    const hit = cache ? await cache.get(key).catch(() => null) : null;
+    if (hit && Date.now() - hit.at < 7 * 864e5) { leads = hit.leads; fromCache = true; }
+    if (!leads) {
+      onProgress(`Searching Google Maps for ${trade.label.toLowerCase()} in ${suburb}… this usually takes 30–90 seconds.`);
+      try {
+        leads = await searchGoogle(suburb, trade, googleToken, maxPlaces);
+        if (cache) cache.put(key, leads).catch(() => {});
+      } catch (e) {
+        if (!(e instanceof CreditError)) throw e;
+        onProgress("Google Maps credit used up this month. Searching OpenStreetMap instead…");
+        const fallback = await searchBusinesses({ suburb, tradeId, onlySuburb, tomtomKey, onProgress });
+        return { ...fallback, errors: [e.message + " Showing OpenStreetMap results instead."].concat(fallback.errors) };
+      }
+    }
+    const displaySuburb = suburb.trim().replace(/\b\w/g, (c) => c.toUpperCase());
+    const filtered = onlySuburb ? leads.filter((l) => inSuburbByAddress(l, suburb)) : leads;
+    const merged = new Map();
+    for (const l of filtered) {
+      const lead = { ...l, suburb: onlySuburb ? displaySuburb : l.suburb };
+      const id = leadKey(lead);
+      if (!merged.has(id)) merged.set(id, { ...lead, id });
+    }
+    const sorted = [...merged.values()].sort((a, b) =>
+      KIND_ORDER[a.websiteKind] - KIND_ORDER[b.websiteKind] || (b.phoneValid ? 1 : 0) - (a.phoneValid ? 1 : 0) || (b.reviews || 0) - (a.reviews || 0));
+    return { suburb: displaySuburb, trade, leads: sorted, counts: { google: leads.length }, errors: [], cached: fromCache, source: "google" };
+  }
   const cacheKey = [normalise(suburb), tradeId, onlySuburb, !!tomtomKey].join("|");
   const cached = resultCache.get(cacheKey);
   if (cached && Date.now() - cached.at < RESULT_TTL_MS) return { ...cached.result, leads: cached.result.leads.map((l) => ({ ...l })), cached: true };

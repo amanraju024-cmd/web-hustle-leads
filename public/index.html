@@ -86,6 +86,10 @@
   .notice.error { background: var(--bad-bg); color: var(--bad); }
   .notice.warn { background: var(--warn-bg); color: var(--warn); }
   .notice.info { background: var(--chip); color: var(--text); }
+  .search-opts { grid-column: 1 / -1; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+  .search-opts select { width: auto; padding: 5px 8px; margin-left: 6px; }
+  .source-line { grid-column: 1 / -1; margin: 0; }
+  .inline.wide input { max-width: none; flex: 1; }
   .badphone { color: var(--warn); font-weight: 600; font-size: 14px; }
   .maybe { font-size: 13px; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 10px; margin-top: 8px !important; }
   .empty { text-align: center; color: var(--muted); padding: 28px 10px; background: var(--card); border: 1px dashed var(--border); border-radius: 12px; }
@@ -119,7 +123,7 @@
 
   /* search + leads */
   form.search { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
-  form.search label.check { grid-column: 1 / -1; margin: 0; }
+  form.search label.check { margin: 0; }
   .list { display: grid; gap: 10px; }
   .lead { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
   .lead.overdue { border-color: var(--bad); box-shadow: inset 4px 0 0 var(--bad); }

@@ -230,4 +230,20 @@ test("searches and events: create own, admin reads all", async () => {
   await assertFails(getDoc(doc(as("w2"), "searches/s1")));
 });
 
+// ---------- Google Maps connection + shared search cache ----------
+test("only admin sets the Google Maps token; active team members can read it", async () => {
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/integrations"), { apifyToken: "apify_api_x" }));
+  await assertFails(setDoc(doc(as("w1"), "settings/integrations"), { apifyToken: "mine" }));
+  await assertSucceeds(getDoc(doc(as("w1"), "settings/integrations")));
+  await assertFails(getDoc(doc(as("stranger"), "settings/integrations")));
+  await assertFails(getDoc(doc(as("off"), "settings/integrations")));
+});
+
+test("search cache: active users read/write their own entries only", async () => {
+  await assertSucceeds(setDoc(doc(as("w1"), "searchCache/k1"), { uid: "w1", leads: [{ name: "A" }] }));
+  await assertSucceeds(getDoc(doc(as("w2"), "searchCache/k1")));
+  await assertFails(setDoc(doc(as("w1"), "searchCache/k2"), { uid: "w2", leads: [] }));
+  await assertFails(setDoc(doc(as("stranger"), "searchCache/k3"), { uid: "stranger", leads: [] }));
+});
+
 function assert1(cond, msg) { if (!cond) throw new Error("Assertion failed: " + msg); }

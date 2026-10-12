@@ -50,12 +50,26 @@ service cloud.firestore {
     }
 
     // ---------- team settings ----------
-    match /settings/{doc} {
+    match /settings/team {
       allow read: if isActive();
       allow write: if isAdmin()
         && request.resource.data.dailyGoal is int
         && request.resource.data.dailyGoal >= 1
         && request.resource.data.dailyGoal <= 500;
+    }
+    // Google Maps data connection (Apify token): only signed-in team members can read it
+    match /settings/integrations {
+      allow read: if isActive();
+      allow write: if isAdmin() && shortString(request.resource.data.apifyToken, 200);
+    }
+
+    // ---------- shared search results, so the team doesn't pay twice for the same search ----------
+    match /searchCache/{key} {
+      allow read: if isActive();
+      allow write: if isActive()
+        && request.resource.data.leads is list
+        && request.resource.data.leads.size() <= 300
+        && request.resource.data.uid == request.auth.uid;
     }
 
     // ---------- claims: one per business, readable by everyone so search can show "Taken by" ----------
