@@ -12,31 +12,31 @@ const TOMTOM = "https://api.tomtom.com/search/2/poiSearch/";
 
 // Business types: OpenStreetMap tag filters + the words TomTom searches for
 export const TRADES = [
-  { id: "barber", label: "Barber", osm: ['["shop"="hairdresser"]["hairdresser"~"barber|men",i]', '["shop"="barber"]', '["shop"="hairdresser"]["name"~"barber",i]'], tt: "barber" },
-  { id: "hair", label: "Hair salon", osm: ['["shop"="hairdresser"]'], tt: "hair salon" },
-  { id: "beauty", label: "Beauty salon", osm: ['["shop"="beauty"]', '["shop"="cosmetics"]'], tt: "beauty salon" },
-  { id: "nails", label: "Nail salon", osm: ['["shop"="beauty"]["beauty"~"nails",i]', '["shop"="beauty"]["name"~"nail",i]'], tt: "nail salon" },
-  { id: "massage", label: "Massage", osm: ['["shop"="massage"]', '["healthcare"="massage"]'], tt: "massage" },
-  { id: "cafe", label: "Cafe", osm: ['["amenity"="cafe"]'], tt: "cafe" },
-  { id: "restaurant", label: "Restaurant", osm: ['["amenity"="restaurant"]'], tt: "restaurant" },
-  { id: "takeaway", label: "Takeaway", osm: ['["amenity"="fast_food"]'], tt: "takeaway" },
-  { id: "bakery", label: "Bakery", osm: ['["shop"="bakery"]', '["shop"="pastry"]'], tt: "bakery" },
-  { id: "florist", label: "Florist", osm: ['["shop"="florist"]'], tt: "florist" },
-  { id: "mechanic", label: "Mechanic", osm: ['["shop"="car_repair"]', '["shop"="tyres"]'], tt: "car repair" },
-  { id: "plumber", label: "Plumber", osm: ['["craft"="plumber"]'], tt: "plumber" },
-  { id: "electrician", label: "Electrician", osm: ['["craft"="electrician"]'], tt: "electrician" },
-  { id: "builder", label: "Builder", osm: ['["craft"="builder"]', '["office"="construction_company"]'], tt: "builder" },
-  { id: "painter", label: "Painter", osm: ['["craft"="painter"]'], tt: "painter" },
-  { id: "landscaper", label: "Landscaper / gardener", osm: ['["craft"="gardener"]', '["shop"="garden_centre"]'], tt: "landscaping" },
-  { id: "cleaner", label: "Cleaner", osm: ['["shop"="dry_cleaning"]', '["shop"="laundry"]', '["craft"="cleaning"]'], tt: "cleaning" },
-  { id: "dentist", label: "Dentist", osm: ['["amenity"="dentist"]', '["healthcare"="dentist"]'], tt: "dentist" },
-  { id: "physio", label: "Physiotherapist", osm: ['["healthcare"="physiotherapist"]'], tt: "physiotherapist" },
-  { id: "gym", label: "Gym / fitness", osm: ['["leisure"="fitness_centre"]', '["leisure"="sports_centre"]["sport"~"fitness|martial",i]'], tt: "gym" },
-  { id: "pet", label: "Pet groomer / pet shop", osm: ['["shop"="pet"]', '["shop"="pet_grooming"]', '["amenity"="veterinary"]'], tt: "pet grooming" },
-  { id: "tattoo", label: "Tattoo", osm: ['["shop"="tattoo"]'], tt: "tattoo" },
-  { id: "accountant", label: "Accountant", osm: ['["office"="accountant"]', '["office"="tax_advisor"]'], tt: "accountant" },
-  { id: "realestate", label: "Real estate agent", osm: ['["office"="estate_agent"]'], tt: "real estate agent" },
-  { id: "retail", label: "Any shop", osm: ['["shop"]'], tt: "shop" },
+  { id: "barber", nom: "barber", label: "Barber", osm: ['["shop"="hairdresser"]["hairdresser"~"barber|men",i]', '["shop"="barber"]', '["shop"="hairdresser"]["name"~"barber",i]'], tt: "barber" },
+  { id: "hair", nom: "hairdresser", label: "Hair salon", osm: ['["shop"="hairdresser"]'], tt: "hair salon" },
+  { id: "beauty", nom: "beauty salon", label: "Beauty salon", osm: ['["shop"="beauty"]', '["shop"="cosmetics"]'], tt: "beauty salon" },
+  { id: "nails", nom: "nail salon", label: "Nail salon", osm: ['["shop"="beauty"]["beauty"~"nails",i]', '["shop"="beauty"]["name"~"nail",i]'], tt: "nail salon" },
+  { id: "massage", nom: "massage", label: "Massage", osm: ['["shop"="massage"]', '["healthcare"="massage"]'], tt: "massage" },
+  { id: "cafe", nom: "cafe", label: "Cafe", osm: ['["amenity"="cafe"]'], tt: "cafe" },
+  { id: "restaurant", nom: "restaurant", label: "Restaurant", osm: ['["amenity"="restaurant"]'], tt: "restaurant" },
+  { id: "takeaway", nom: "fast food", label: "Takeaway", osm: ['["amenity"="fast_food"]'], tt: "takeaway" },
+  { id: "bakery", nom: "bakery", label: "Bakery", osm: ['["shop"="bakery"]', '["shop"="pastry"]'], tt: "bakery" },
+  { id: "florist", nom: "florist", label: "Florist", osm: ['["shop"="florist"]'], tt: "florist" },
+  { id: "mechanic", nom: "car repair", label: "Mechanic", osm: ['["shop"="car_repair"]', '["shop"="tyres"]'], tt: "car repair" },
+  { id: "plumber", nom: "plumber", label: "Plumber", osm: ['["craft"="plumber"]'], tt: "plumber" },
+  { id: "electrician", nom: "electrician", label: "Electrician", osm: ['["craft"="electrician"]'], tt: "electrician" },
+  { id: "builder", nom: "builder", label: "Builder", osm: ['["craft"="builder"]', '["office"="construction_company"]'], tt: "builder" },
+  { id: "painter", nom: "painter", label: "Painter", osm: ['["craft"="painter"]'], tt: "painter" },
+  { id: "landscaper", nom: "garden centre", label: "Landscaper / gardener", osm: ['["craft"="gardener"]', '["shop"="garden_centre"]'], tt: "landscaping" },
+  { id: "cleaner", nom: "dry cleaning", label: "Cleaner", osm: ['["shop"="dry_cleaning"]', '["shop"="laundry"]', '["craft"="cleaning"]'], tt: "cleaning" },
+  { id: "dentist", nom: "dentist", label: "Dentist", osm: ['["amenity"="dentist"]', '["healthcare"="dentist"]'], tt: "dentist" },
+  { id: "physio", nom: "physiotherapist", label: "Physiotherapist", osm: ['["healthcare"="physiotherapist"]'], tt: "physiotherapist" },
+  { id: "gym", nom: "gym", label: "Gym / fitness", osm: ['["leisure"="fitness_centre"]', '["leisure"="sports_centre"]["sport"~"fitness|martial",i]'], tt: "gym" },
+  { id: "pet", nom: "pet shop", label: "Pet groomer / pet shop", osm: ['["shop"="pet"]', '["shop"="pet_grooming"]', '["amenity"="veterinary"]'], tt: "pet grooming" },
+  { id: "tattoo", nom: "tattoo", label: "Tattoo", osm: ['["shop"="tattoo"]'], tt: "tattoo" },
+  { id: "accountant", nom: "accountant", label: "Accountant", osm: ['["office"="accountant"]', '["office"="tax_advisor"]'], tt: "accountant" },
+  { id: "realestate", nom: "estate agent", label: "Real estate agent", osm: ['["office"="estate_agent"]'], tt: "real estate agent" },
+  { id: "retail", nom: "shop", label: "Any shop", osm: ['["shop"]'], tt: "shop" },
 ];
 
 const SOCIAL_OR_BOOKING_HOSTS = [
@@ -158,6 +158,25 @@ function osmToLead(el, geo, trade) {
   };
 }
 
+/** Backup when the Overpass servers can't be reached: OpenStreetMap's main search (max 40 results). */
+export async function searchNominatim(geo, trade) {
+  const { s, w, n, e } = geo.bbox;
+  const url = `${NOMINATIM}?format=jsonv2&addressdetails=1&extratags=1&bounded=1&limit=40&countrycodes=au`
+    + `&viewbox=${w},${n},${e},${s}&q=${encodeURIComponent(trade.nom || trade.tt)}`;
+  const results = await getJson(url, {}, "OpenStreetMap");
+  if (!Array.isArray(results)) throw new SearchError("OpenStreetMap sent back something unexpected.");
+  return results.map((r) => {
+    const a = r.address || {};
+    const tags = {
+      ...(r.extratags || {}),
+      name: r.name || r.namedetails?.name || "",
+      "addr:housenumber": a.house_number, "addr:street": a.road, "addr:suburb": a.suburb || a.town || a.city,
+    };
+    const lead = osmToLead({ tags, lat: Number(r.lat), lon: Number(r.lon) }, geo, trade);
+    return lead && { ...lead, inside: insideSuburb(geo, lead.lat, lead.lon) };
+  }).filter(Boolean);
+}
+
 /** Asks every OpenStreetMap server at once and uses whichever answers first. */
 export async function searchOsm(geo, trade) {
   if (!geo.bbox) return [];
@@ -165,15 +184,22 @@ export async function searchOsm(geo, trade) {
   const ctrl = new AbortController();
   try {
     const data = await Promise.any(OVERPASS.map((endpoint) =>
-      getJson(endpoint, { method: "POST", body: new URLSearchParams({ data: body }), signal: ctrl.signal }, "OpenStreetMap", OVERPASS_TIMEOUT_MS)
+      getJson(`${endpoint}?data=${encodeURIComponent(body)}`, { signal: ctrl.signal }, "OpenStreetMap", OVERPASS_TIMEOUT_MS)
         .then((d) => { if (!Array.isArray(d.elements)) throw new SearchError("OpenStreetMap sent back something unexpected."); return d; })));
     ctrl.abort(); // stop the slower servers
     return data.elements.map((el) => osmToLead(el, geo, trade)).filter(Boolean)
       .map((l) => ({ ...l, inside: insideSuburb(geo, l.lat, l.lon) }));
   } catch (e) {
     ctrl.abort();
-    const errs = e instanceof AggregateError ? e.errors : [e];
-    throw errs.find((x) => x instanceof SearchError) || new SearchError("OpenStreetMap is busy right now. Try again in a minute.");
+    console.warn("Overpass failed on every server:", e instanceof AggregateError ? e.errors.map((x) => x.message) : e);
+    try {
+      const leads = await searchNominatim(geo, trade);
+      leads.usedBackup = true;
+      return leads;
+    } catch {
+      const errs = e instanceof AggregateError ? e.errors : [e];
+      throw errs.find((x) => x instanceof SearchError) || new SearchError("OpenStreetMap is busy right now. Try again in a minute.");
+    }
   }
 }
 
@@ -249,18 +275,22 @@ export async function searchBusinesses({ suburb, tradeId, onlySuburb = true, tom
   if (tomtomKey) jobs.push(searchTomTom(geo, trade, tomtomKey));
   const settled = await Promise.allSettled(jobs);
   const lists = [], errors = [];
+  const notes = [];
   settled.forEach((r, i) => {
-    if (r.status === "fulfilled") lists.push(r.value);
+    if (r.status === "fulfilled") {
+      lists.push(r.value);
+      if (r.value.usedBackup) notes.push("OpenStreetMap's business search couldn't be reached (a VPN or ad blocker can cause this), so this is a shorter backup list of up to 40.");
+    }
     else errors.push(`${i === 0 ? "OpenStreetMap" : "TomTom"}: ${r.reason?.message || "failed"}`);
   });
-  if (!lists.length) throw new SearchError(errors.join(" "));
+  if (!lists.length) throw new SearchError(errors.join(" ") + " If you're using a VPN or ad blocker, try turning it off.");
   const result = {
     suburb: geo.name,
     trade,
     leads: mergeLeads(lists, geo, onlySuburb),
     counts: { osm: settled[0].status === "fulfilled" ? settled[0].value.length : null, tomtom: tomtomKey ? (settled[1]?.status === "fulfilled" ? settled[1].value.length : null) : undefined },
-    errors,
+    errors: errors.concat(notes),
   };
-  if (!errors.length) resultCache.set(cacheKey, { at: Date.now(), result });
+  if (!errors.length && !notes.length) resultCache.set(cacheKey, { at: Date.now(), result });
   return result;
 }
