@@ -183,7 +183,7 @@ function renderAuth(mode = "signin", msg = "") {
         </form>
         <div class="auth-links">
           ${owner ? `<button class="linkbtn" data-mode="signin">Back to sign in</button>`
-            : `<button class="linkbtn" id="forgot">Forgot password?</button><button class="linkbtn" data-mode="owner">Owner setup</button>`}
+            : `<button class="linkbtn" id="forgot">Forgot password?</button>`}
         </div>
       </div>
       <footer class="foot">Made by <b>AR Methods</b> · CEO <b>Aman Raju</b></footer>
