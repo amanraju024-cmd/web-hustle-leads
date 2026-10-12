@@ -117,7 +117,7 @@ function renderShell() {
   $("#app").innerHTML = `
     <header class="top">
       <a class="brand" href="#home">
-        <img src="logo.png" alt="" width="34" height="43">
+        <img src="logo.png" alt="" width="28" height="36">
         <span><b>AR METHODS</b><small>WEBSITES • SYSTEMS • GROWTH</small></span>
       </a>
       <div class="who">
@@ -260,7 +260,9 @@ D.onAuthStateChanged(D.auth, async (user) => {
 async function screenHome() {
   setTitle("Home");
   const today = perthDay();
-  view().innerHTML = `<h1 class="page">G'day, ${esc(state.me.name.split(" ")[0])}</h1><div id="homeBody"><div class="loading"><span class="spinner"></span></div></div>`;
+  const hour = Number(new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Perth", hour: "numeric", hour12: false }).format(new Date()));
+  const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  view().innerHTML = `<h1 class="page">${greet}, ${esc(state.me.name.split(" ")[0])}</h1><div id="homeBody"><div class="loading"><span class="spinner"></span></div></div>`;
   const rid = state.routeId;
   const [mine, leads] = await Promise.all([D.getStatsFor(state.me.id), D.getLeadsFor(state.me.id)]);
   if (rid !== state.routeId) return;
@@ -330,7 +332,7 @@ function screenFind() {
             <option value="thorough" ${saved.coverage === "thorough" ? "selected" : ""}>Thorough (up to 540)</option>
           </select></label>` : ""}
       </div>
-      <p class="muted small source-line">${GOOGLE_MAPS_KEY || state.googleToken ? "Searching <b>Google Maps</b>. Results are saved for the team for 7 days, so repeat searches don't use the daily limit."
+      <p class="muted small source-line">${GOOGLE_MAPS_KEY || state.googleToken ? "Searching <b>Google Maps</b>. Results are saved for the team for 30 days, so repeat searches don&#39;t use the daily limit."
         : isAdmin() ? `Searching OpenStreetMap. <a href="#team">Connect Google Maps</a> for much better results.` : "Searching OpenStreetMap."}</p>
     </form>
     <div id="searchMsg"></div>
