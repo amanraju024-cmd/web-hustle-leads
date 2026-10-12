@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-armethods \"node --test tests/rules.test.js\""
+    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-armethods \"node --test tests/rules.test.js\"",
+    "test:unit": "node --test tests/phone.test.js"
   },
   "dependencies": {
     "firebase": "^10.14.1"

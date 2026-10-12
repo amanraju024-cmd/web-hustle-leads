@@ -1,10 +1,10 @@
 // AR Methods Leads — app shell, routing and screens.
 import * as D from "./data.js";
-import { TRADES, searchBusinesses, SearchError } from "./search.js";
+import { TRADES, searchBusinesses, SearchError, findHiddenWebsites } from "./search.js";
 import { OWNER_EMAIL, TOMTOM_KEY } from "./config.js";
 import {
-  esc, safeUrl, telHref, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
-  streakFrom, downloadCsv,
+  esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
+  streakFrom, downloadCsv, cleanPhone,
 } from "./util.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -44,6 +44,17 @@ async function busy(btn, label, fn) {
   btn.innerHTML = `<span class="spinner"></span>${esc(label)}`;
   try { return await fn(); }
   finally { btn.disabled = false; btn.innerHTML = old; }
+}
+
+function phoneHtml(raw) {
+  const p = cleanPhone(raw);
+  if (!p.display) return `<span class="muted">No phone listed</span>`;
+  if (!p.valid) return `<span class="badphone" title="This doesn't look like a complete Australian number">⚠ ${esc(p.display)} (check number)</span>`;
+  return `<a class="phone" href="${esc(p.tel)}">📞 ${esc(p.display)}</a>`;
+}
+function siteHint(l) {
+  return l.websiteKind === "none" && l.maybeSite
+    ? `<p class="maybe">Might have a website: <a href="https://${esc(l.maybeSite)}" target="_blank" rel="noopener">${esc(l.maybeSite)}</a>. Check before calling.</p>` : "";
 }
 
 function errorBox(msg) { return msg ? `<div class="notice error">${esc(msg)}</div>` : ""; }
@@ -237,7 +248,7 @@ async function screenHome() {
           <li class="due ${toDate(l.callbackAt) < new Date() ? "overdue" : ""}">
             <a href="#leads">${esc(l.name)}</a>
             <span>${esc(fmtDateTime(l.callbackAt))}</span>
-            ${l.phone ? `<a class="phone" href="${esc(telHref(l.phone))}">${esc(l.phone)}</a>` : ""}
+            ${l.phone ? phoneHtml(l.phone) : ""}
           </li>`).join("")}</ul>` : `<p class="muted">Nothing due today.</p>`}
       </section>
       <section class="quick">
@@ -292,6 +303,11 @@ async function runSearch(e) {
       state.filter = c.none ? "none" : c.social ? "social" : "all";
       if (!result.cached) D.recordSearch(state.me, result);
       drawResults();
+      let pending = null;
+      findHiddenWebsites(result.leads, () => {
+        if (state.search !== result || pending) return;
+        pending = setTimeout(() => { pending = null; if (state.search === result) drawResults(); }, 400);
+      }).then(() => { if (state.search === result) drawResults(); });
     } catch (err) {
       console.error(err);
       $("#searchMsg").innerHTML = errorBox(err instanceof SearchError ? err.message : D.authMessage(err));
@@ -309,7 +325,9 @@ function drawResults() {
   const r = state.search;
   if (!r || !$("#results")) return;
   const c = countKinds(r.leads);
-  const shown = state.filter === "all" ? r.leads : r.leads.filter((l) => l.websiteKind === state.filter);
+  const shown = (state.filter === "all" ? r.leads : r.leads.filter((l) => l.websiteKind === state.filter))
+    .slice().sort((a, b) => (a.websiteKind === b.websiteKind ? (a.maybeSite ? 1 : 0) - (b.maybeSite ? 1 : 0) : 0));
+  const maybeCount = r.leads.filter((l) => l.maybeSite).length;
   const sources = [`OpenStreetMap ${r.counts.osm ?? "failed"}`].concat(r.counts.tomtom !== undefined ? [`TomTom ${r.counts.tomtom ?? "failed"}`] : []);
   $("#results").innerHTML = `
     ${r.errors.length ? `<div class="notice warn">${esc(r.errors.join(" "))}</div>` : ""}
@@ -318,7 +336,7 @@ function drawResults() {
         `<button type="button" class="chip ${state.filter === k ? "on" : ""}" data-filter="${k}">${k === "all" ? "All" : KIND_LABEL[k]} (${n})</button>`).join("")}
     </div>
     <p class="muted small">${esc(r.trade.label)} in ${esc(r.suburb)} · ${esc(sources.join(" · "))}.
-      “No website” means none is listed. Tap <b>Check Google</b> before you call to confirm.</p>
+      “No website” means none is listed${maybeCount ? `; ${maybeCount} might have one (marked below)` : ""}. Tap <b>Check Google</b> before you call to confirm.</p>
     ${isAdmin() && shown.length ? `<div class="toolbar"><button class="ghost" id="poolAll">Add all shown to pool</button></div>` : ""}
     <div class="list">${shown.length ? shown.map(resultCard).join("") : `<div class="empty">${r.leads.length ? "Nothing in this group. Try another filter." : "No businesses found. Try another business type, a nearby suburb, or untick “Only inside this suburb”."}</div>`}</div>`;
   document.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("click", () => { state.filter = b.dataset.filter; drawResults(); }));
@@ -351,7 +369,8 @@ function resultCard(l) {
       <div class="lead-main">
         <h3>${esc(l.name)} <span class="badge ${l.websiteKind}">${KIND_LABEL[l.websiteKind]}</span></h3>
         <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}</p>
-        <p class="row">${l.phone ? `<a class="phone" href="${esc(telHref(l.phone))}">📞 ${esc(l.phone)}</a>` : `<span class="muted">No phone listed</span>`} ${leadLinks(l)}</p>
+        <p class="row">${phoneHtml(l.phone)} ${leadLinks(l)}</p>
+        ${siteHint(l)}
       </div>
       <div class="lead-act">${action}</div>
     </article>`;
@@ -430,7 +449,8 @@ function myLeadCard(l, now) {
         <h3>${esc(l.name)} <span class="badge ${esc(l.websiteKind)}">${KIND_LABEL[l.websiteKind] || ""}</span> <span class="status s-${esc(l.status.replace(/\s/g, ""))}">${esc(l.status)}</span></h3>
         <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}${l.lastCalledAt ? " · last called " + esc(fmtDateTime(l.lastCalledAt)) : ""}</p>
         ${due ? `<p class="due-line">Call back ${esc(fmtDateTime(l.callbackAt))}</p>` : ""}
-        <p class="row">${l.phone ? `<a class="phone" href="${esc(telHref(l.phone))}">📞 ${esc(l.phone)}</a>` : `<span class="muted">No phone listed</span>`} ${leadLinks(l)}</p>
+        <p class="row">${phoneHtml(l.phone)} ${leadLinks(l)}</p>
+        ${siteHint(l)}
         <div class="log">
           <label for="n-${esc(l.id)}">Notes</label>
           <textarea id="n-${esc(l.id)}" rows="2" maxlength="2000" placeholder="Who you spoke to, what they said…">${esc(l.notes)}</textarea>
@@ -749,7 +769,7 @@ async function screenPool() {
         <td><b>${esc(l.name)}</b><br><span class="muted small">${esc(l.category)} · ${esc(l.suburb)} · ${KIND_LABEL[l.websiteKind] || ""}</span>${l.notes ? `<br><span class="small">${esc(l.notes.slice(0, 120))}</span>` : ""}</td>
         <td><span class="status s-${esc(l.status.replace(/\s/g, ""))}">${esc(l.status)}</span></td>
         <td>${l.assignedName ? esc(l.assignedName) : '<span class="muted">Unassigned</span>'}</td>
-        <td>${l.phone ? `<a href="${esc(telHref(l.phone))}">${esc(l.phone)}</a>` : ""}</td>
+        <td>${l.phone ? phoneHtml(l.phone) : ""}</td>
         <td class="small">${esc(fmtDateTime(l.updatedAt))}</td></tr>`).join("")}</tbody></table></div>
       ${shown.length > 500 ? `<p class="muted small">Showing the first 500 of ${shown.length}. Narrow the filters to see more.</p>` : ""}`
       : `<div class="empty">${leads.length ? "No leads match these filters." : `No leads yet. Search on <a href="#find">Find leads</a> and claim them or add them to the pool.`}</div>`;

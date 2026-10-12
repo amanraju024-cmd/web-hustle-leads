@@ -89,3 +89,28 @@ export function chunk(arr, n) {
   for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
   return out;
 }
+
+// ---------- Australian phone numbers ----------
+/**
+ * Cleans an Australian phone number. Returns { display, tel, valid }.
+ * Handles +61 / 61 prefixes, (08) brackets, Perth numbers missing the 08, and "a; b" lists.
+ */
+export function cleanPhone(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { display: "", tel: "", valid: false };
+  for (const part of text.split(/[;,/]| or /i)) {
+    let d = part.replace(/[^\d+]/g, "");
+    if (d.startsWith("+61")) d = "0" + d.slice(3);
+    else if (d.startsWith("61") && d.length === 11) d = "0" + d.slice(2);
+    d = d.replace(/^0+(?=0[2-478]\d{8}$)/, "");
+    if (d.startsWith("00")) continue; // other countries
+    if (/^[69]\d{7}$/.test(d)) d = "08" + d; // Perth number written without the area code
+    let display = "";
+    if (/^04\d{8}$/.test(d)) display = `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
+    else if (/^0[2378]\d{8}$/.test(d)) display = `${d.slice(0, 2)} ${d.slice(2, 6)} ${d.slice(6)}`;
+    else if (/^1[38]00\d{6}$/.test(d)) display = `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
+    else if (/^13\d{4}$/.test(d)) display = `${d.slice(0, 2)} ${d.slice(2, 4)} ${d.slice(4)}`;
+    if (display) return { display, tel: "tel:" + (d.startsWith("0") ? "+61" + d.slice(1) : d), valid: true };
+  }
+  return { display: text, tel: "", valid: false };
+}

@@ -116,6 +116,7 @@ function leadDoc(lead, assignedTo, assignedName, createdBy) {
   return {
     name: lead.name, phone: lead.phone || "", address: lead.address || "", suburb: lead.suburb || "",
     category: lead.category || "", website: lead.website || "", websiteKind: lead.websiteKind || "none",
+    maybeSite: lead.maybeSite || "",
     source: lead.source || "", lat: lead.lat ?? null, lon: lead.lon ?? null,
     assignedTo, assignedName, status: "New", notes: "", callbackAt: null, lastCalledAt: null,
     createdBy, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),

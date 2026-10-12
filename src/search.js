@@ -1,5 +1,5 @@
 // Finds local businesses from OpenStreetMap (free, no key) and optionally TomTom (free key, no card).
-import { normalise, slug } from "./util.js";
+import { normalise, slug, cleanPhone } from "./util.js";
 
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 const OVERPASS = [
@@ -57,6 +57,11 @@ export function websiteKind(url) {
 }
 
 export class SearchError extends Error {}
+
+function phoneFields(raw) {
+  const p = cleanPhone(raw);
+  return { phone: p.display, phoneValid: p.valid };
+}
 
 async function getJson(url, opts, what, timeoutMs = 15000) {
   let res;
@@ -146,7 +151,7 @@ function osmToLead(el, geo, trade) {
   const suburb = t["addr:suburb"] || t["addr:city"] || geo.name;
   return {
     name: t.name.trim(),
-    phone: (t.phone || t["contact:phone"] || t["contact:mobile"] || t.mobile || "").split(";")[0].trim(),
+    ...phoneFields(t.phone || t["contact:phone"] || t["contact:mobile"] || t.mobile || ""),
     address: [t["addr:unit"] ? t["addr:unit"] + "/" : "", t["addr:housenumber"], t["addr:street"]].filter(Boolean).join(" ").replace("/ ", "/"),
     suburb,
     category: trade.label,
@@ -220,7 +225,7 @@ export async function searchTomTom(geo, trade, key) {
     const site = poi.url ? (poi.url.includes("://") ? poi.url : "http://" + poi.url) : "";
     return {
       name: (poi.name || "").trim(),
-      phone: (poi.phone || "").replace(/^\+61\s?/, "0").trim(),
+      ...phoneFields(poi.phone || ""),
       address: [a.streetNumber, a.streetName].filter(Boolean).join(" "),
       suburb: a.municipalitySubdivision || a.municipality || geo.name,
       category: trade.label,
@@ -250,12 +255,13 @@ export function mergeLeads(lists, geo, onlySuburb) {
     const id = leadKey(lead);
     const prev = merged.get(id);
     if (!prev) { merged.set(id, { ...lead, id }); continue; }
-    for (const f of ["phone", "address", "website"]) if (!prev[f] && lead[f]) prev[f] = lead[f];
+    if (lead.phoneValid && !prev.phoneValid) { prev.phone = lead.phone; prev.phoneValid = true; }
+    for (const f of ["address", "website"]) if (!prev[f] && lead[f]) prev[f] = lead[f];
     if (KIND_ORDER[lead.websiteKind] > KIND_ORDER[prev.websiteKind]) prev.websiteKind = lead.websiteKind;
     if (!prev.source.includes(lead.source)) prev.source += " + " + lead.source;
   }
   return [...merged.values()].sort((a, b) =>
-    KIND_ORDER[a.websiteKind] - KIND_ORDER[b.websiteKind] || (b.phone ? 1 : 0) - (a.phone ? 1 : 0) || a.name.localeCompare(b.name));
+    KIND_ORDER[a.websiteKind] - KIND_ORDER[b.websiteKind] || (b.phoneValid ? 1 : 0) - (a.phoneValid ? 1 : 0) || a.name.localeCompare(b.name));
 }
 
 const resultCache = new Map(); // same search within 30 minutes is instant
@@ -293,4 +299,49 @@ export async function searchBusinesses({ suburb, tradeId, onlySuburb = true, tom
   };
   if (!errors.length && !notes.length) resultCache.set(cacheKey, { at: Date.now(), result });
   return result;
+}
+
+
+// ---------- "does this business actually have a website?" check ----------
+const DOMAIN_CACHE_KEY = "arm_dns_v1";
+function readDomainCache() { try { return JSON.parse(localStorage.getItem(DOMAIN_CACHE_KEY) || "{}"); } catch { return {}; } }
+function saveDomainCache(c) {
+  try {
+    const keys = Object.keys(c).slice(-800);
+    localStorage.setItem(DOMAIN_CACHE_KEY, JSON.stringify(Object.fromEntries(keys.map((k) => [k, c[k]]))));
+  } catch { /* fine */ }
+}
+
+/** Likely website addresses for a business name, e.g. "Ubai's Barbershop" -> ubaisbarbershop.com.au */
+export function domainGuesses(name) {
+  const base = slug(String(name).replace(/['’]/g, "")).replace(/^the-/, "").replace(/-(pty|ltd|pty-ltd)$/g, "").replace(/-/g, "");
+  if (base.length < 4 || base.length > 50) return [];
+  return [`${base}.com.au`, `${base}.au`];
+}
+
+async function domainExists(domain, cache) {
+  if (domain in cache) return cache[domain];
+  try {
+    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`, { headers: { accept: "application/dns-json" } });
+    const data = await res.json();
+    cache[domain] = data.Status === 0 && Array.isArray(data.Answer) && data.Answer.length > 0;
+  } catch { return false; } // don't cache network failures
+  return cache[domain];
+}
+
+/** For leads with no website listed, looks for a matching .com.au/.au domain. Calls onFound(lead) as matches come in. */
+export async function findHiddenWebsites(leads, onFound) {
+  const cache = readDomainCache();
+  const todo = leads.filter((l) => l.websiteKind === "none" && !l.maybeSite).slice(0, 80);
+  let i = 0;
+  async function worker() {
+    while (i < todo.length) {
+      const lead = todo[i++];
+      for (const d of domainGuesses(lead.name)) {
+        if (await domainExists(d, cache)) { lead.maybeSite = d; onFound(lead); break; }
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, worker));
+  saveDomainCache(cache);
 }
