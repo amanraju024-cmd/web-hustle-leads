@@ -1,7 +1,7 @@
 // Firebase setup and every read/write the app makes. Write shapes must match firestore.rules.
 import { initializeApp, deleteApp } from "firebase/app";
 import {
-  getAuth, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence, connectAuthEmulator, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   signOut, sendPasswordResetEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential,
 } from "firebase/auth";
 import {
@@ -14,7 +14,9 @@ import { perthDay, weekStart, chunk } from "./util.js";
 const useEmulator = ["localhost", "127.0.0.1"].includes(location.hostname);
 
 export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+// Email/password only: leaving out the popup/redirect helper stops phones from downloading
+// Google's api.js and a hidden firebaseapp.com page before the app can start.
+export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
 if (useEmulator) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
@@ -65,7 +67,7 @@ export async function listUsers() {
 /** Creates a login for a worker without signing the admin out (uses a throwaway second app). */
 export async function createWorker({ name, email, password, role = "worker" }, adminUid) {
   const second = initializeApp(firebaseConfig, "create-" + Date.now());
-  const secondAuth = getAuth(second);
+  const secondAuth = initializeAuth(second, { persistence: inMemoryPersistence });
   if (useEmulator) connectAuthEmulator(secondAuth, "http://127.0.0.1:9099", { disableWarnings: true });
   try {
     const cred = await createUserWithEmailAndPassword(secondAuth, email, password);

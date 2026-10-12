@@ -286,13 +286,34 @@ function startApp() {
   route();
 }
 
-D.onAuthStateChanged(D.auth, async (user) => {
-  clearListeners();
-  state.user = user;
-  state.me = null;
-  if (!user) return renderAuth();
-  const boot = readBoot(user.uid);
+// Start drawing straight away for the last person who used this device, before Firebase has
+// finished restoring the login. Firestore waits for the login itself, so reads stay correct.
+const LAST_KEY = "arm_last_uid";
+let optimisticUid = null;
+try {
+  const uid = localStorage.getItem(LAST_KEY);
+  const boot = uid && readBoot(uid);
   if (boot?.me?.active) {
+    optimisticUid = uid;
+    Object.assign(state, { user: { uid }, me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "" });
+    startApp();
+  }
+} catch {}
+
+D.onAuthStateChanged(D.auth, async (user) => {
+  const alreadyShowing = optimisticUid && user?.uid === optimisticUid;
+  optimisticUid = null;
+  if (!alreadyShowing) {
+    clearListeners();
+    state.user = user;
+    state.me = null;
+  } else state.user = user;
+  if (!user) { try { localStorage.removeItem(LAST_KEY); } catch {} return renderAuth(); }
+  try { localStorage.setItem(LAST_KEY, user.uid); } catch {}
+  const boot = readBoot(user.uid);
+  if (alreadyShowing) {
+    // already on screen from the device's copy
+  } else if (boot?.me?.active) {
     // Show the app straight away from the device's copy
     Object.assign(state, { me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "" });
     startApp();
