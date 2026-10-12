@@ -38,6 +38,52 @@ function toast(msg, kind = "ok") {
   setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 300); }, 3200);
 }
 
+// ---------- motion ----------
+const reduceMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+function countUp(el) {
+  const target = parseInt(el.textContent, 10);
+  if (!Number.isFinite(target) || target <= 0 || reduceMotion() || String(target) !== el.textContent.trim()) return;
+  const start = performance.now(), dur = 700;
+  const step = (t) => {
+    const k = Math.min(1, (t - start) / dur);
+    el.textContent = String(Math.round(target * (1 - Math.pow(1 - k, 3))));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  el.textContent = "0";
+  requestAnimationFrame(step);
+}
+function animateIn(root) {
+  let i = 0;
+  root.querySelectorAll(".card, .tile, .lead, .tips li, .quote-card, .roast, .quick, .chips").forEach((el) => {
+    if (el.dataset.anim) return;
+    el.dataset.anim = "1";
+    el.classList.add("rise");
+    el.style.setProperty("--i", Math.min(i++, 12));
+  });
+  root.querySelectorAll(".tile b.num, .goal-head b.num [data-n]").forEach((el) => { if (!el.dataset.counted) { el.dataset.counted = "1"; countUp(el); } });
+}
+new MutationObserver((muts) => {
+  const v = document.getElementById("view");
+  if (v && muts.some((m) => m.addedNodes.length)) animateIn(v);
+}).observe(document.getElementById("app"), { childList: true, subtree: true });
+
+function confetti() {
+  if (reduceMotion()) return;
+  const colors = ["#5a0614", "#c9a45c", "#f6e3b4", "#8a1a28", "#ffffff"];
+  for (let i = 0; i < 90; i++) {
+    const c = document.createElement("i");
+    c.className = "confetti";
+    c.style.left = Math.random() * 100 + "vw";
+    c.style.background = colors[i % colors.length];
+    c.style.setProperty("--x", (Math.random() * 40 - 20) + "vw");
+    c.style.setProperty("--r", (Math.random() * 1080 - 540) + "deg");
+    c.style.setProperty("--d", (1.2 + Math.random() * 1.2) + "s");
+    c.style.animationDelay = Math.random() * 0.25 + "s";
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 2800);
+  }
+}
+
 async function busy(btn, label, fn) {
   const old = btn.innerHTML;
   btn.disabled = true;
@@ -65,7 +111,7 @@ function errorBox(msg) { return msg ? `<div class="notice error">${esc(msg)}</di
 function renderShell() {
   const admin = isAdmin();
   const tabs = [
-    ["home", "Home", "⌂"], ["find", "Find leads", "⌕"], ["leads", "My leads", "☎"], ["board", "Leaderboard", "★"],
+    ["home", "Home", "⌂"], ["find", "Find leads", "⌕"], ["leads", "My leads", "☎"], ["board", "Leaderboard", "★"], ["lockin", "Can't be bothered", "🔥"],
     ...(admin ? [["admin", "Admin", "▦"]] : []),
   ];
   $("#app").innerHTML = `
@@ -80,7 +126,7 @@ function renderShell() {
       </div>
     </header>
     <nav class="tabs" aria-label="Main">
-      ${tabs.map(([id, label, icon]) => `<a href="#${id}" data-tab="${id}"><span aria-hidden="true">${icon}</span>${label}</a>`).join("")}
+      ${tabs.map(([id, label, icon]) => `<a href="#${id}" data-tab="${id}" class="${id === "lockin" ? "lockin-tab" : ""}"><span aria-hidden="true">${icon}</span>${label}</a>`).join("")}
     </nav>
     <main id="view" tabindex="-1"></main>
     <footer class="foot">Made by <b>AR Methods</b> · CEO <b>Aman Raju</b></footer>`;
@@ -99,7 +145,7 @@ async function route() {
   state.routeId = (state.routeId || 0) + 1;
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
-    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount,
+    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin,
     admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam,
   };
   const adminOnly = ["admin", "worker", "pool", "team"];
@@ -495,7 +541,8 @@ function wireLeadCard(card) {
       try {
         await D.logCall(state.me, lead, status, notes.value, status === "Call back" ? fromLocalInput(cbInput.value) : null);
         document.activeElement?.blur();
-        toast(`Logged: ${status} (+${D.pointsFor(status)} pt${D.pointsFor(status) === 1 ? "" : "s"})`);
+        toast(status === "Won" ? `WON. +${D.pointsFor(status)} points. Go again.` : `Logged: ${status} (+${D.pointsFor(status)} pt${D.pointsFor(status) === 1 ? "" : "s"})`);
+        if (status === "Won" || status === "Interested") confetti();
       } catch (err) { console.error(err); toast(D.authMessage(err), "bad"); }
     });
     drawMyLeads();
@@ -897,4 +944,117 @@ async function screenTeam() {
     });
   });
   drawList();
+}
+
+
+// =====================================================================
+// I CAN'T BE FUCKING BOTHERED
+// =====================================================================
+const QUOTES = [
+  "Nobody is coming to save you. Pick up the phone.",
+  "You don't need motivation. You need to stop being soft.",
+  "Discipline is doing it when you don't feel like it. Which is right now.",
+  "Someone hungrier than you made 30 calls while you were “getting ready”.",
+  "Comfort is the most expensive thing you'll ever buy.",
+  "Every call you skip is $500 you just handed to someone else.",
+  "Hard calls, easy life. Easy calls, hard life.",
+  "You're not tired. You're uncomfortable. Different thing.",
+  "The phone weighs 200 grams. Lift it.",
+  "Rejection won't kill you. Being broke might.",
+  "Nobody remembers the calls you were scared to make. They remember the money you didn't make.",
+  "You said you wanted it. Prove it or stop saying it.",
+];
+const ROASTS_GENERIC = [
+  "You opened a page called “I can't be bothered”. That's the most effort you've put in all day.",
+  "Scrolling won't pay your rent. Unless you're scrolling to the dial button.",
+  "Your excuses have better attendance than you do.",
+  "If overthinking paid, you'd be retired by now.",
+  "The leads aren't going to call themselves. Weird, right?",
+  "You've rearranged your desk three times. The phone is still on it.",
+  "Imagine explaining to future you that you didn't call because you “weren't feeling it”.",
+];
+const TIPS = [
+  ["First call in the next 60 seconds.", "Don't plan it. Don't rehearse it. Open My leads and dial the top number."],
+  ["Close every other tab.", "Yes, that one too. The only thing open is this app and your phone."],
+  ["Run a 25-minute sprint.", "Calls only. No breaks, no snacks, no “quick check” of your phone. Timer's below."],
+  ["Stand up when you call.", "You sound more confident on your feet. People can hear it."],
+  ["Use the script.", "Don't improvise when you're nervous. Read it word for word until it's automatic."],
+  ["Count the no's, not the yes's.", "20 no's is a great day. Every no gets you closer to the yes."],
+  ["Next number within 10 seconds.", "Got rejected? Log it, dial the next one. Sulking is not a status."],
+  ["Reward after, not before.", "Food, games, phone: you earn them after the sprint. Not as a warm-up."],
+];
+const pick = (arr, not) => { let x; do { x = arr[Math.floor(Math.random() * arr.length)]; } while (arr.length > 1 && x === not); return x; };
+
+function roastFor(calls, goal, name) {
+  const first = name.split(" ")[0];
+  if (calls === 0) return [`0 calls today, ${first}. Even your phone is bored of you.`, "Fix it: open My leads and make one call. Just one. Right now."];
+  if (calls < goal / 3) return [`${calls} call${calls === 1 ? "" : "s"}. The goal is ${goal}. Maths clearly isn't the only thing you're avoiding.`, `${goal - calls} to go. Stop reading this and dial.`];
+  if (calls < goal) return [`${calls} calls. Not bad. Not good either. ${goal - calls} short of the goal, ${first}.`, "Finish the job. Half-done calls pay half-nothing."];
+  return [`${calls} calls. Goal smashed. Fine, you're not useless today.`, "Do 10 more and I might even be nice to you."];
+}
+
+function screenLockin() {
+  setTitle("Can't be bothered");
+  const today = perthDay();
+  let quote = pick(QUOTES);
+  let generic = pick(ROASTS_GENERIC);
+  let calls = 0;
+  view().innerHTML = `
+    <section class="lockin-hero">
+      <h1 class="glitch">I can't be <span class="cross">fucking</span> bothered</h1>
+      <p class="tough">Yeah? Tough. Read this, then pick up the phone.</p>
+    </section>
+    <div id="lockQuote"></div>
+    <div id="lockRoast"></div>
+    <section class="card sprint" id="sprint">
+      <h2>25-minute call sprint</h2>
+      <div class="clock" id="clock">25:00</div>
+      <p class="muted small" id="sprintMsg">Calls only until the timer hits zero.</p>
+      <div class="toolbar" style="justify-content:center"><button class="primary" id="sprintGo">Start sprint</button><button class="ghost" id="sprintReset">Reset</button><a class="ghost" href="#leads">Open My leads</a></div>
+    </section>
+    <h2>How to lock in</h2>
+    <ol class="tips">${TIPS.map(([t, d]) => `<li><div><b>${esc(t)}</b><span class="muted">${esc(d)}</span></div></li>`).join("")}</ol>`;
+  const drawQuote = () => {
+    $("#lockQuote").innerHTML = `<div class="quote-card pop"><blockquote>${esc(quote)}</blockquote>
+      <button class="ghost small hit" id="hitMe">Hit me again</button></div>`;
+    $("#hitMe").addEventListener("click", () => { quote = pick(QUOTES, quote); generic = pick(ROASTS_GENERIC, generic); drawQuote(); drawRoast(); });
+  };
+  const drawRoast = () => {
+    const [line, fix] = roastFor(calls, state.goal, state.me.name);
+    $("#lockRoast").innerHTML = `<p class="roast pop">${esc(line)}<small>${esc(fix)} ${esc(generic)}</small></p>`;
+  };
+  drawQuote(); drawRoast();
+  state.unsub.push(D.watchStats("day", today, (rows) => {
+    const mine = rows.find((r) => r.uid === state.me.id);
+    const n = mine ? mine.calls : 0;
+    if (n !== calls) { calls = n; if ($("#lockRoast")) drawRoast(); }
+  }, () => {}));
+
+  // sprint timer
+  let left = 25 * 60, timer = null, startCalls = 0;
+  const fmt = (n) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+  const stop = () => { clearInterval(timer); timer = null; $("#sprint")?.classList.remove("running"); };
+  state.unsub.push(stop);
+  $("#sprintGo").addEventListener("click", () => {
+    if (timer) { stop(); $("#sprintGo").textContent = "Resume"; $("#sprintMsg").textContent = "Paused. The leads didn't pause, by the way."; return; }
+    if (left === 25 * 60) startCalls = calls;
+    $("#sprint").classList.add("running");
+    $("#sprintGo").textContent = "Pause";
+    $("#sprintMsg").textContent = "Go. Dial. Now.";
+    timer = setInterval(() => {
+      left--;
+      if ($("#clock")) $("#clock").textContent = fmt(left);
+      if (left <= 0) {
+        stop();
+        const made = calls - startCalls;
+        $("#sprintGo").textContent = "Start sprint";
+        $("#sprintMsg").textContent = made > 0 ? `Sprint done: ${made} call${made === 1 ? "" : "s"}. Take 5, then go again.` : "Sprint done and 0 calls logged. Bold strategy. Try again.";
+        if (made > 0) confetti();
+        left = 25 * 60;
+      }
+    }, 1000);
+  });
+  $("#sprintReset").addEventListener("click", () => {
+    stop(); left = 25 * 60; $("#clock").textContent = fmt(left); $("#sprintGo").textContent = "Start sprint"; $("#sprintMsg").textContent = "Calls only until the timer hits zero.";
+  });
 }
