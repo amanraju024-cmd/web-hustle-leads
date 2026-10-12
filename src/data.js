@@ -116,6 +116,7 @@ export function recordSearch(me, result) {
   const social = result.leads.filter((l) => l.websiteKind === "social").length;
   addDoc(collection(db, "searches"), {
     uid: me.id, userName: me.name, suburb: result.suburb, category: result.trade.label,
+    googleRequests: result.googleRequests || 0, source: result.source || "osm",
     results: result.leads.length, noWebsite, social, day: perthDay(), createdAt: serverTimestamp(),
   }).catch((e) => console.warn("search not saved", e));
   logEvent(me, "search", `searched ${result.trade.label.toLowerCase()} in ${result.suburb} (${result.leads.length} results, ${noWebsite} with no website)`);
@@ -280,6 +281,9 @@ export async function getSearchesFor(uid) {
 export async function getAllCalls() {
   const snap = await getDocs(query(collection(db, "calls"), orderBy("createdAt", "desc"), limit(5000)));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+export function watchSearchesForDay(day, cb, onErr) {
+  return onSnapshot(query(collection(db, "searches"), where("day", "==", day)), (snap) => cb(snap.docs.map((d) => d.data())), onErr);
 }
 export async function getAllSearches() {
   const snap = await getDocs(query(collection(db, "searches"), orderBy("createdAt", "desc"), limit(5000)));

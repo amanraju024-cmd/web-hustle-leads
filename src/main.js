@@ -1,7 +1,7 @@
 // AR Methods Leads — app shell, routing and screens.
 import * as D from "./data.js";
 import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE } from "./search.js";
-import { OWNER_EMAIL, TOMTOM_KEY } from "./config.js";
+import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY } from "./config.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
   streakFrom, downloadCsv, cleanPhone,
@@ -277,14 +277,14 @@ function screenFind() {
       <button class="primary" type="submit" id="searchBtn">Search</button>
       <div class="search-opts">
         <label class="check"><input type="checkbox" id="onlySuburb" ${saved.only === false ? "" : "checked"}> Only inside this suburb</label>
-        ${state.googleToken ? `<label class="check">Coverage
+        ${GOOGLE_MAPS_KEY || state.googleToken ? `<label class="check">Coverage
           <select id="coverage" aria-label="Coverage">
-            <option value="quick" ${saved.coverage === "quick" ? "selected" : ""}>Quick (${GOOGLE_COVERAGE.quick})</option>
-            <option value="standard" ${!saved.coverage || saved.coverage === "standard" ? "selected" : ""}>Standard (${GOOGLE_COVERAGE.standard})</option>
-            <option value="thorough" ${saved.coverage === "thorough" ? "selected" : ""}>Thorough (${GOOGLE_COVERAGE.thorough})</option>
+            <option value="quick" ${!saved.coverage || saved.coverage === "quick" ? "selected" : ""}>Quick (up to 60)</option>
+            <option value="standard" ${saved.coverage === "standard" ? "selected" : ""}>Standard (up to 240)</option>
+            <option value="thorough" ${saved.coverage === "thorough" ? "selected" : ""}>Thorough (up to 540)</option>
           </select></label>` : ""}
       </div>
-      <p class="muted small source-line">${state.googleToken ? "Searching <b>Google Maps</b>. Results are shared with the team for 7 days, so repeat searches are free."
+      <p class="muted small source-line">${GOOGLE_MAPS_KEY || state.googleToken ? "Searching <b>Google Maps</b>. Results are saved for the team for 7 days, so repeat searches don't use the daily limit."
         : isAdmin() ? `Searching OpenStreetMap. <a href="#team">Connect Google Maps</a> for much better results.` : "Searching OpenStreetMap."}</p>
     </form>
     <div id="searchMsg"></div>
@@ -298,14 +298,14 @@ async function runSearch(e) {
   const suburb = $("#suburb").value.trim();
   const tradeId = $("#trade").value;
   const onlySuburb = $("#onlySuburb").checked;
-  const coverage = $("#coverage")?.value || "standard";
+  const coverage = $("#coverage")?.value || "quick";
   if (!suburb) return;
   try { localStorage.setItem("arm_search", JSON.stringify({ suburb, trade: tradeId, only: onlySuburb, coverage })); } catch {}
   $("#searchMsg").innerHTML = "";
   await busy($("#searchBtn"), "Searching", async () => {
     try {
       const result = await searchBusinesses({
-        suburb, tradeId, onlySuburb, tomtomKey: TOMTOM_KEY, googleToken: state.googleToken, coverage, cache: D.searchCache(state.me),
+        suburb, tradeId, onlySuburb, tomtomKey: TOMTOM_KEY, googleToken: state.googleToken, placesKey: GOOGLE_MAPS_KEY, coverage, cache: D.searchCache(state.me),
         onProgress: (msg) => { if ($("#searchMsg")) $("#searchMsg").innerHTML = `<div class="notice info"><span class="spinner"></span>${esc(msg)}</div>`; },
       });
       $("#searchMsg").innerHTML = "";
@@ -341,7 +341,7 @@ function drawResults() {
     .slice().sort((a, b) => (a.websiteKind === b.websiteKind ? (a.maybeSite ? 1 : 0) - (b.maybeSite ? 1 : 0) : 0));
   const maybeCount = r.leads.filter((l) => l.maybeSite).length;
   const sources = r.source === "google"
-    ? [`Google Maps${r.cached ? " (saved search, no credit used)" : ""}`]
+    ? [`Google Maps${r.cached ? " (saved search, no usage)" : r.googleRequests ? ` (${r.googleRequests} request${r.googleRequests === 1 ? "" : "s"})` : ""}`]
     : [`OpenStreetMap ${r.counts.osm ?? "failed"}`].concat(r.counts.tomtom !== undefined ? [`TomTom ${r.counts.tomtom ?? "failed"}`] : []);
   $("#results").innerHTML = `
     ${r.errors.length ? `<div class="notice warn">${esc(r.errors.join(" "))}</div>` : ""}
@@ -614,6 +614,8 @@ async function screenAdmin() {
     </section>`;
 
   let todayEvents = [];
+  let googleToday = 0;
+  state.unsub.push(D.watchSearchesForDay(today, (rows) => { googleToday = rows.reduce((n, r) => n + (r.googleRequests || 0), 0); drawKpis(); }, () => {}));
   const drawKpis = () => {
     if (!$("#kpis")) return;
     const todayRows = weekRows.filter((r) => r.day === today);
@@ -625,7 +627,7 @@ async function screenAdmin() {
       ${tile("Interested", sum(todayRows, "interested"), `${sum(weekRows, "interested")} this week`)}
       ${tile("Won", sum(todayRows, "won"), `${sum(weekRows, "won")} this week`)}
       ${tile("Points", sum(todayRows, "points"), `${sum(weekRows, "points")} this week`)}
-      ${tile("Searches today", evCount(todayEvents, "search"), "lead searches")}
+      ${tile("Searches today", evCount(todayEvents, "search"), `${googleToday} Google requests used`)}
       ${tile("Leads claimed", evCount(todayEvents, "claim"), "today")}
     </section>`;
     const tBoard = D.leaderboard(todayRows), wBoard = D.leaderboard(weekRows);
@@ -833,8 +835,8 @@ async function screenTeam() {
       <p class="muted small">Send them the email and temporary password. They can change it under Account.</p>
     </form>
     <form class="card" id="gForm" autocomplete="off">
-      <h2>Google Maps connection</h2>
-      <p class="muted small">${state.googleToken ? "✅ Connected. Searches use Google Maps." : "Not connected. Searches use OpenStreetMap."}
+      <h2>Backup Google Maps connection (optional)</h2>
+      <p class="muted small">Searches use Google Maps through the free Google key built into the app. If Google's daily limit runs out, this backup keeps searches on Google Maps. ${state.googleToken ? "✅ Backup connected." : "Backup not connected."}
         Uses a free <a href="https://apify.com" target="_blank" rel="noopener">Apify</a> account (no card): about US$5 of searches free each month. When it runs out, searches fall back to OpenStreetMap until next month.</p>
       <label for="gToken">Apify API token (Apify → Settings → API &amp; Integrations)</label>
       <div class="inline wide"><input id="gToken" type="password" placeholder="${state.googleToken ? "Saved. Paste a new one to replace it" : "apify_api_..."}" spellcheck="false">
