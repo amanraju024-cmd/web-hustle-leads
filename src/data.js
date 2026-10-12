@@ -79,11 +79,13 @@ export async function createWorker({ name, email, password, role = "worker" }, a
 export const updateUser = (uid, fields) => updateDoc(doc(db, "users", uid), { ...fields, updatedAt: serverTimestamp() });
 
 // ---------- settings ----------
-export async function getDailyGoal() {
+export async function getTeamSettings() {
   const snap = await getDoc(doc(db, "settings", "team"));
-  return snap.exists() ? snap.data().dailyGoal : 30;
+  const d = snap.exists() ? snap.data() : {};
+  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10 };
 }
-export const setDailyGoal = (n) => setDoc(doc(db, "settings", "team"), { dailyGoal: n });
+export const getDailyGoal = async () => (await getTeamSettings()).dailyGoal;
+export const saveTeamSettings = (dailyGoal) => setDoc(doc(db, "settings", "team"), { dailyGoal }, { merge: true });
 export async function getGoogleToken() {
   const snap = await getDoc(doc(db, "settings", "integrations"));
   return snap.exists() ? snap.data().apifyToken || "" : "";
@@ -213,7 +215,7 @@ export const saveNotes = (leadId, notes, callbackAt) =>
 /**
  * Logs a call: updates the lead, writes the call record and bumps today's stats, all in one transaction.
  */
-export async function logCall(me, lead, status, notes, callbackAt) {
+export async function logCall(me, lead, status, notes, callbackAt, dealValue = 0) {
   const day = perthDay();
   const week = weekStart(day);
   const callRef = doc(collection(db, "calls"));
@@ -221,7 +223,8 @@ export async function logCall(me, lead, status, notes, callbackAt) {
   const points = pointsFor(status);
   await runTransaction(db, async (tx) => {
     const stat = await tx.get(statRef);
-    const prev = stat.exists() ? stat.data() : { calls: 0, interested: 0, won: 0 };
+    const prev = stat.exists() ? stat.data() : { calls: 0, interested: 0, won: 0, revenue: 0 };
+    const value = status === "Won" ? Math.max(0, Math.min(100000, Math.round(Number(dealValue) || 0))) : 0;
     const calls = prev.calls + 1;
     const interested = prev.interested + (status === "Interested" ? 1 : 0);
     const won = prev.won + (status === "Won" ? 1 : 0);
@@ -231,15 +234,19 @@ export async function logCall(me, lead, status, notes, callbackAt) {
     });
     tx.set(callRef, {
       leadId: lead.id, leadName: lead.name, uid: me.id, userName: me.name, status, notes, points,
-      day, week, createdAt: serverTimestamp(),
+      day, week, createdAt: serverTimestamp(), ...(status === "Won" ? { value } : {}),
     });
     tx.set(statRef, {
       uid: me.id, name: me.name, day, week, calls, interested, won,
       points: calls + 3 * interested + 10 * won, lastCallId: callRef.id,
+      revenue: (prev.revenue || 0) + value,
     });
   });
   const note = notes.trim() ? `: “${notes.trim().slice(0, 120)}”` : "";
-  logEvent(me, "call", `marked ${lead.name} as ${status}${note}`, { leadId: lead.id, status });
+  const money = status === "Won" && dealValue ? ` ($${Math.round(dealValue).toLocaleString("en-AU")})` : "";
+  logEvent(me, "call", `marked ${lead.name} as ${status}${money}${note}`, { leadId: lead.id, status });
+  if (status === "Won") celebrate(me, "won", `${me.name} just closed ${lead.name}${money} 💰`);
+  else if (status === "Interested") celebrate(me, "interested", `${me.name} got ${lead.name} interested 🔥`);
 }
 
 // ---------- stats ----------
@@ -252,12 +259,36 @@ export async function getStatsFor(uid) {
   return snap.docs.map((d) => d.data());
 }
 
+// ---------- live team pop-ups ----------
+export function celebrate(me, type, text) {
+  return addDoc(collection(db, "celebrations"), { uid: me.id, name: me.name, type, text: text.slice(0, 200), at: serverTimestamp() })
+    .catch((e) => console.warn("celebration not saved", e));
+}
+export function watchCelebrations(sinceMs, cb) {
+  return onSnapshot(query(collection(db, "celebrations"), where("at", ">", Timestamp.fromMillis(sinceMs))), (snap) => {
+    snap.docChanges().forEach((ch) => { if (ch.type === "added") cb({ id: ch.doc.id, ...ch.doc.data() }); });
+  }, () => {});
+}
+
+export async function getStatsSince(day) {
+  const snap = await getDocs(query(collection(db, "stats"), where("day", ">=", day)));
+  return snap.docs.map((d) => d.data());
+}
+export async function getCallsForWeek(week) {
+  const snap = await getDocs(query(collection(db, "calls"), where("week", "==", week)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+export async function getStatsForWeek(week) {
+  const snap = await getDocs(query(collection(db, "stats"), where("week", "==", week)));
+  return snap.docs.map((d) => d.data());
+}
+
 /** Sums stats rows per worker and ranks them by points, then won, then calls. */
 export function leaderboard(rows) {
   const by = new Map();
   for (const r of rows) {
-    const cur = by.get(r.uid) || { uid: r.uid, name: r.name, calls: 0, interested: 0, won: 0, points: 0 };
-    cur.calls += r.calls; cur.interested += r.interested; cur.won += r.won; cur.points += r.points;
+    const cur = by.get(r.uid) || { uid: r.uid, name: r.name, calls: 0, interested: 0, won: 0, points: 0, revenue: 0 };
+    cur.calls += r.calls; cur.interested += r.interested; cur.won += r.won; cur.points += r.points; cur.revenue += r.revenue || 0;
     cur.name = r.name || cur.name;
     by.set(r.uid, cur);
   }

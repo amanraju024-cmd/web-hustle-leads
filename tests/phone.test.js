@@ -37,3 +37,13 @@ test("tel links use +61", () => {
   assert.equal(cleanPhone("08 9332 9929").tel, "tel:+61893329929");
   assert.equal(cleanPhone("13 13 13").tel, "tel:131313");
 });
+
+import { commissionFor, commissionTotal } from "../src/extras.js";
+test("commission: $100 for $500+, 10% under $500", () => {
+  assert.equal(commissionFor(500), 100);
+  assert.equal(commissionFor(1200), 100);
+  assert.equal(commissionFor(499), 49.9);
+  assert.equal(commissionFor(300), 30);
+  assert.equal(commissionFor(0), 0);
+  assert.equal(commissionTotal([{ status: "Won", value: 800 }, { status: "Won", value: 250 }, { status: "Interested" }]), 125);
+});

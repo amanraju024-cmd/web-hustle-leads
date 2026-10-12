@@ -3,6 +3,10 @@ import * as D from "./data.js";
 import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE } from "./search.js";
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY } from "./config.js";
 import {
+  scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
+  commissionFor, commissionTotal,
+} from "./extras.js";
+import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
   streakFrom, downloadCsv, cleanPhone,
 } from "./util.js";
@@ -136,6 +140,48 @@ function markTab(name) {
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name));
 }
 
+// ---------- live team pop-ups ----------
+let celebrationsUnsub = null;
+function startCelebrations() {
+  if (celebrationsUnsub) celebrationsUnsub();
+  celebrationsUnsub = D.watchCelebrations(Date.now() - 2000, (c) => {
+    if (c.uid === state.me?.id) return;
+    const el = document.createElement("div");
+    el.className = `celebrate ${esc(c.type)}`;
+    el.innerHTML = `<span class="ce-icon">${c.type === "won" ? "💰" : c.type === "badge" ? "🏆" : c.type === "goal" ? "🎯" : "🔥"}</span><span>${esc(c.text)}</span>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add("show"), 20);
+    setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 5000);
+    if (c.type === "won") confetti();
+  });
+}
+
+const modalQueue = [];
+function showModal(html, onReady) {
+  if (document.querySelector(".modal-wrap")) { modalQueue.push([html, onReady]); return; }
+  const wrap = document.createElement("div");
+  wrap.className = "modal-wrap";
+  wrap.innerHTML = `<div class="modal pop" role="dialog" aria-modal="true">${html}<button class="ghost wide-btn" data-close>Close</button></div>`;
+  document.body.appendChild(wrap);
+  const close = () => { wrap.remove(); const next = modalQueue.shift(); if (next) setTimeout(() => showModal(...next), 150); };
+  wrap.addEventListener("click", (e) => { if (e.target === wrap || e.target.closest("[data-close]")) close(); });
+  wrap.querySelector("[data-close]").focus();
+  onReady?.(wrap, close);
+}
+
+async function checkBadges() {
+  try {
+    const rows = await D.getStatsFor(state.me.id);
+    const earned = earnedBadges(totalsFrom(rows, state.goal, perthDay()));
+    const fresh = newBadges(state.me.id, earned);
+    if (!fresh.length) return;
+    confetti();
+    showModal(`<div class="badge-pop">${fresh.map((b) => `<div class="big-badge"><span>${b.icon}</span><b>${esc(b.name)}</b><small>${esc(b.desc)}</small></div>`).join("")}</div>
+      <h2 style="text-align:center">Badge${fresh.length > 1 ? "s" : ""} unlocked</h2>`);
+    fresh.forEach((b) => D.celebrate(state.me, "badge", `${state.me.name} unlocked “${b.name}” ${b.icon}`));
+  } catch (e) { console.warn("badge check failed", e); }
+}
+
 // =====================================================================
 // Routing
 // =====================================================================
@@ -146,9 +192,9 @@ async function route() {
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
     home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin,
-    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam,
+    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport,
   };
-  const adminOnly = ["admin", "worker", "pool", "team"];
+  const adminOnly = ["admin", "worker", "pool", "team", "report"];
   let fn = routes[name] || screenHome;
   if (adminOnly.includes(name) && !isAdmin()) fn = screenHome;
   markTab(adminOnly.includes(name) ? "admin" : name);
@@ -247,6 +293,7 @@ D.onAuthStateChanged(D.auth, async (user) => {
     state.goal = await D.getDailyGoal().catch(() => 30);
     state.googleToken = await D.getGoogleToken().catch(() => "");
     renderShell();
+    startCelebrations();
     route();
   } catch (e) {
     console.error(e);
@@ -264,8 +311,11 @@ async function screenHome() {
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   view().innerHTML = `<h1 class="page">${greet}, ${esc(state.me.name.split(" ")[0])}</h1><div id="homeBody"><div class="loading"><span class="spinner"></span></div></div>`;
   const rid = state.routeId;
-  const [mine, leads] = await Promise.all([D.getStatsFor(state.me.id), D.getLeadsFor(state.me.id)]);
+  const monthStart = today.slice(0, 8) + "01";
+  const [mine, leads, myCalls] = await Promise.all([D.getStatsFor(state.me.id), D.getLeadsFor(state.me.id), D.getCallsFor(state.me.id).catch(() => [])]);
   if (rid !== state.routeId) return;
+  const monthWon = myCalls.filter((c) => c.status === "Won" && c.day >= monthStart);
+  const earnedMonth = commissionTotal(monthWon);
   const draw = (todayRows) => {
     if (!$("#homeBody")) return;
     const board = D.leaderboard(todayRows);
@@ -299,6 +349,18 @@ async function screenHome() {
             <span>${esc(fmtDateTime(l.callbackAt))}</span>
             ${l.phone ? phoneHtml(l.phone) : ""}
           </li>`).join("")}</ul>` : `<p class="muted">Nothing due today.</p>`}
+      </section>
+      <section class="card earn">
+        <div><span class="muted">Your commission this month</span><b class="num">${money(earnedMonth)}</b>
+          <small class="muted">${monthWon.length} deal${monthWon.length === 1 ? "" : "s"} closed · $100 per site of $500+, 10% under $500</small></div>
+        <span class="earn-icon" aria-hidden="true">💵</span>
+      </section>
+      <section class="card">
+        <h2>Badges <span class="muted small">${earnedBadges(totalsFrom(allMine, state.goal, today)).length} / ${BADGES.length}</span></h2>
+        <div class="badges">${(() => { const tt = totalsFrom(allMine, state.goal, today); return BADGES.map((b) => {
+          const got = b.test(tt);
+          return `<div class="bdg ${got ? "got" : ""}" title="${esc(b.desc)}"><span>${b.icon}</span><b>${esc(b.name)}</b><small>${esc(b.desc)}</small></div>`;
+        }).join(""); })()}</div>
       </section>
       <section class="quick">
         <a class="primary" href="#find">Find new leads</a>
@@ -518,12 +580,30 @@ function myLeadCard(l, now) {
           <textarea id="n-${esc(l.id)}" rows="2" maxlength="2000" placeholder="Who you spoke to, what they said…">${esc(l.notes)}</textarea>
           <div class="cb ${l.status === "Call back" ? "" : "hidden"}"><label for="c-${esc(l.id)}">Call back at (Perth time)</label>
             <input type="datetime-local" id="c-${esc(l.id)}" value="${esc(toLocalInput(l.callbackAt))}"></div>
+          <div class="deal hidden"><label for="v-${esc(l.id)}">Deal amount (what they're paying you)</label>
+            <div class="inline"><span class="cur">$</span><input type="number" inputmode="decimal" min="0" max="100000" step="1" id="v-${esc(l.id)}" value="500"></div>
+            <p class="small muted">Commission: <b data-comm>$100</b></p></div>
           <p class="small muted">Log this call as:</p>
           <div class="outcomes">${D.CALL_STATUSES.map((s) => `<button class="out o-${s.replace(/\s/g, "")}" data-status="${esc(s)}">${esc(s)}</button>`).join("")}</div>
           <button class="linkbtn" data-save>Save notes only</button>
         </div>
+        ${scriptHtml(l)}
       </div>
     </article>`;
+}
+
+function scriptHtml(l) {
+  const sc = scriptFor(l, state.me);
+  return `<details class="script"><summary>📜 Call script &amp; objections</summary>
+    <ol class="script-steps">
+      <li><b>Open</b><p>${esc(sc.opener)}</p></li>
+      <li><b>Hook</b><p>${esc(sc.hook)}</p></li>
+      <li><b>Offer</b><p>${esc(sc.offer)}</p></li>
+      <li><b>Close</b><p>${esc(sc.close)}</p></li>
+    </ol>
+    <h3 class="obj-h">If they say…</h3>
+    <dl class="objections">${OBJECTIONS.map(([q, a]) => `<dt>${esc(q)}</dt><dd>${esc(a)}</dd>`).join("")}</dl>
+  </details>`;
 }
 
 function wireLeadCard(card) {
@@ -531,6 +611,10 @@ function wireLeadCard(card) {
   const notes = card.querySelector("textarea");
   const cbBox = card.querySelector(".cb");
   const cbInput = card.querySelector('input[type="datetime-local"]');
+  const dealBox = card.querySelector(".deal");
+  const dealInput = card.querySelector('input[type="number"]');
+  const commEl = card.querySelector("[data-comm]");
+  dealInput.addEventListener("input", () => { commEl.textContent = money(commissionFor(dealInput.value)); });
   card.querySelectorAll("[data-status]").forEach((btn) => btn.addEventListener("click", async () => {
     const status = btn.dataset.status;
     if (status === "Call back" && !cbInput.value) {
@@ -539,12 +623,23 @@ function wireLeadCard(card) {
       toast("Pick a call-back time, then tap Call back again.");
       return;
     }
+    if (status === "Won" && dealBox.classList.contains("hidden")) {
+      dealBox.classList.remove("hidden");
+      dealInput.focus();
+      dealInput.select();
+      toast("Enter the deal amount, then tap Won again.");
+      return;
+    }
+    if (status === "Won" && !(Number(dealInput.value) > 0)) return toast("Enter what they're paying (more than $0).", "bad");
     await busy(btn, "Saving", async () => {
       try {
-        await D.logCall(state.me, lead, status, notes.value, status === "Call back" ? fromLocalInput(cbInput.value) : null);
+        const value = status === "Won" ? Number(dealInput.value) : 0;
+        await D.logCall(state.me, lead, status, notes.value, status === "Call back" ? fromLocalInput(cbInput.value) : null, value);
         document.activeElement?.blur();
-        toast(status === "Won" ? `WON. +${D.pointsFor(status)} points. Go again.` : `Logged: ${status} (+${D.pointsFor(status)} pt${D.pointsFor(status) === 1 ? "" : "s"})`);
+        toast(status === "Won" ? `WON ${money(value)}. You earned ${money(commissionFor(value))}.` : `Logged: ${status} (+${D.pointsFor(status)} pt${D.pointsFor(status) === 1 ? "" : "s"})`);
         if (status === "Won" || status === "Interested") confetti();
+        if (status === "Won") showAfterWon(lead, value);
+        checkBadges();
       } catch (err) { console.error(err); toast(D.authMessage(err), "bad"); }
     });
     drawMyLeads();
@@ -556,6 +651,16 @@ function wireLeadCard(card) {
     });
     drawMyLeads();
   });
+}
+
+function showAfterWon(lead, value) {
+  showModal(`<div class="won-head"><span>💰</span><h2>${esc(lead.name)} is in. ${money(value)}.</h2>
+      <p class="muted">You earned <b>${money(commissionFor(value))}</b>. Before you hang up, squeeze more out of it:</p></div>
+    <div class="after-won">
+      <div><b>1. Care plan (monthly money)</b><p>${esc(AFTER_WON.upsell)}</p></div>
+      <div><b>2. Referral (free leads)</b><p>${esc(AFTER_WON.referral)}</p></div>
+      <div><b>3. Review (more trust)</b><p>${esc(AFTER_WON.review)}</p></div>
+    </div>`);
 }
 
 // =====================================================================
@@ -589,11 +694,11 @@ function boardTable(board, caption) {
   return `
     <div class="tablewrap"><table class="board">
       <caption>${esc(caption)}</caption>
-      <thead><tr><th>#</th><th>Name</th><th class="n">Calls</th><th class="n">Interested</th><th class="n">Won</th><th class="n">Points</th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th class="n">Calls</th><th class="n">Interested</th><th class="n">Won</th><th class="n">Sales</th><th class="n">Points</th></tr></thead>
       <tbody>${board.map((r, i) => `
         <tr class="${r.uid === state.me.id ? "me" : ""} ${i < 3 ? "top" + (i + 1) : ""}">
           <td>${MEDALS[i] || i + 1}</td><td>${esc(r.name)}${r.uid === state.me.id ? ' <em class="you">You</em>' : ""}</td>
-          <td class="n">${r.calls}</td><td class="n">${r.interested}</td><td class="n">${r.won}</td><td class="n"><b>${r.points}</b></td>
+          <td class="n">${r.calls}</td><td class="n">${r.interested}</td><td class="n">${r.won}</td><td class="n">${money(r.revenue)}</td><td class="n"><b>${r.points}</b></td>
         </tr>`).join("")}</tbody>
     </table></div>`;
 }
@@ -609,6 +714,7 @@ function screenAccount() {
       <p><b>${esc(state.me.name)}</b><br><span class="muted">${esc(state.me.email)} · ${isAdmin() ? "Admin" : "Worker"}</span></p>
       <button class="ghost" id="signOut">Sign out</button>
     </section>
+    <section class="card"><h2>Install the app</h2>${installHtml()}</section>
     <form class="card" id="pwForm">
       <h2>Change password</h2>
       <label for="pwOld">Current password</label><input id="pwOld" type="password" autocomplete="current-password" required>
@@ -616,6 +722,12 @@ function screenAccount() {
       <button class="primary" type="submit">Change password</button>
     </form>`;
   $("#signOut").addEventListener("click", D.logOut);
+  document.querySelector("[data-install]")?.addEventListener("click", async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => {});
+    installPrompt = null;
+  });
   $("#pwForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const next = $("#pwNew").value;
@@ -632,7 +744,7 @@ function screenAccount() {
 // =====================================================================
 function adminNav(active) {
   return `<div class="subnav">
-    ${[["admin", "Overview"], ["pool", "Leads"], ["team", "Team"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
+    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["team", "Team"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
   </div>`;
 }
 
@@ -647,6 +759,7 @@ async function screenAdmin() {
   view().innerHTML = `
     ${adminNav("admin")}
     <h1 class="page">Team performance</h1>
+    ${new Date(`${today}T12:00:00+08:00`).getUTCDay() === 1 ? `<div class="notice info">📊 Last week's report is ready. <a href="#report">View it</a></div>` : ""}
     <div id="kpis"></div>
     <section class="card"><h2>Workers</h2><div id="workerTable"></div></section>
     <section class="card">
@@ -664,6 +777,8 @@ async function screenAdmin() {
 
   let todayEvents = [];
   let googleToday = 0;
+  let monthRevenue = 0;
+  D.getStatsSince(today.slice(0, 8) + "01").then((rows) => { monthRevenue = rows.reduce((n, r) => n + (r.revenue || 0), 0); drawKpis(); }).catch(() => {});
   state.unsub.push(D.watchSearchesForDay(today, (rows) => { googleToday = rows.reduce((n, r) => n + (r.googleRequests || 0), 0); drawKpis(); }, () => {}));
   const drawKpis = () => {
     if (!$("#kpis")) return;
@@ -675,7 +790,7 @@ async function screenAdmin() {
       ${tile("Calls today", sum(todayRows, "calls"), `${sum(weekRows, "calls")} this week`)}
       ${tile("Interested", sum(todayRows, "interested"), `${sum(weekRows, "interested")} this week`)}
       ${tile("Won", sum(todayRows, "won"), `${sum(weekRows, "won")} this week`)}
-      ${tile("Points", sum(todayRows, "points"), `${sum(weekRows, "points")} this week`)}
+      ${tile("Sales this week", money(weekRows.reduce((n, r) => n + (r.revenue || 0), 0)), `${money(monthRevenue)} this month`)}
       ${tile("Searches today", evCount(todayEvents, "search"), `${googleToday} Google requests used`)}
       ${tile("Leads claimed", evCount(todayEvents, "claim"), "today")}
     </section>`;
@@ -941,7 +1056,7 @@ async function screenTeam() {
     const n = parseInt($("#goal").value, 10);
     if (!(n >= 1 && n <= 500)) return toast("Pick a goal between 1 and 500.", "bad");
     await busy(e.submitter, "Saving", async () => {
-      try { await D.setDailyGoal(n); state.goal = n; toast("Daily goal saved"); }
+      try { await D.saveTeamSettings(n); state.goal = n; toast("Daily goal saved"); }
       catch (err) { toast(D.authMessage(err), "bad"); }
     });
   });
@@ -1059,4 +1174,73 @@ function screenLockin() {
   $("#sprintReset").addEventListener("click", () => {
     stop(); left = 25 * 60; $("#clock").textContent = fmt(left); $("#sprintGo").textContent = "Start sprint"; $("#sprintMsg").textContent = "Calls only until the timer hits zero.";
   });
+}
+
+// =====================================================================
+// Admin: weekly report
+// =====================================================================
+async function screenReport(arg) {
+  setTitle("Weekly report");
+  const thisWeek = weekStart(perthDay());
+  const week = /^\d{4}-\d{2}-\d{2}$/.test(arg || "") ? weekStart(arg) : addDays(thisWeek, -7);
+  view().innerHTML = `${adminNav("report")}<h1 class="page">Weekly report</h1><div id="repBody"><div class="loading"><span class="spinner"></span></div></div>`;
+  const rid = state.routeId;
+  const [rows, users, calls] = await Promise.all([D.getStatsForWeek(week), D.listUsers(), D.getCallsForWeek(week)]);
+  if (rid !== state.routeId || !$("#repBody")) return;
+  const rep = weeklyReport(rows, users, week);
+  const commissionBy = (uid) => commissionTotal(calls.filter((c) => c.uid === uid));
+  const totalCommission = rep.list.reduce((n, u) => n + commissionBy(u.uid), 0);
+  const label = `${prettyDay(week)} – ${prettyDay(addDays(week, 6))}`;
+  const winner = rep.list.find((u) => u.points > 0);
+  $("#repBody").innerHTML = `
+    <div class="toolbar">
+      <a class="ghost small" href="#report/${addDays(week, -7)}">← Previous week</a>
+      <b class="week-label">${esc(label)}${week === thisWeek ? " (so far)" : ""}</b>
+      ${week < thisWeek ? `<a class="ghost small" href="#report/${addDays(week, 7)}">Next week →</a>` : ""}
+    </div>
+    <section class="tiles">
+      <div class="tile"><span>Calls</span><b class="num">${rep.team.calls}</b></div>
+      <div class="tile"><span>Interested</span><b class="num">${rep.team.interested}</b></div>
+      <div class="tile"><span>Deals won</span><b class="num">${rep.team.won}</b><small>${rep.team.calls ? pct(rep.team.won / rep.team.calls) + " of calls" : ""}</small></div>
+      <div class="tile"><span>Sales</span><b class="num">${money(rep.team.revenue)}</b><small>${money(totalCommission)} commission owed</small></div>
+    </section>
+    ${winner ? `<div class="notice info">🏆 Worker of the week: <b>${esc(winner.name)}</b> with ${winner.points} points (${winner.calls} calls, ${winner.won} won).</div>` : ""}
+    <section class="card"><h2>By worker</h2>
+      <div class="tablewrap"><table class="board">
+        <thead><tr><th>Name</th><th class="n">Calls</th><th class="n">Interested</th><th class="n">Won</th><th class="n">Win rate</th><th class="n">Sales</th><th class="n">Commission</th><th class="n">Days active</th><th>Best day</th></tr></thead>
+        <tbody>${rep.list.map((u) => `<tr><td><a href="#worker/${esc(u.uid)}">${esc(u.name)}</a></td>
+          <td class="n">${u.calls}</td><td class="n">${u.interested}</td><td class="n">${u.won}</td><td class="n">${pct(u.conversion)}</td>
+          <td class="n">${money(u.revenue)}</td><td class="n"><b>${money(commissionBy(u.uid))}</b></td><td class="n">${u.activeDays}/7</td>
+          <td>${u.best.calls ? `${esc(prettyDay(u.best.day))} (${u.best.calls})` : '<span class="muted">—</span>'}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <div class="toolbar"><button class="primary small" id="copyRep">Copy summary</button><button class="ghost small" id="csvRep">Download CSV</button></div>
+    </section>`;
+  const summary = [`AR Methods — week of ${label}`, `Team: ${rep.team.calls} calls, ${rep.team.interested} interested, ${rep.team.won} won, ${money(rep.team.revenue)} in sales`, ""]
+    .concat(rep.list.map((u, i) => `${i + 1}. ${u.name}: ${u.calls} calls, ${u.won} won, ${money(u.revenue)} sales, ${money(commissionBy(u.uid))} commission`)).join("\n");
+  $("#copyRep").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(summary); toast("Summary copied. Paste it in your group chat."); }
+    catch { toast("Couldn't copy on this device.", "bad"); }
+  });
+  $("#csvRep").addEventListener("click", () => downloadCsv(rep.list.map((u) => ({ ...u, conversion: pct(u.conversion), commission: commissionBy(u.uid), bestDay: u.best.day })),
+    ["name", "calls", "interested", "won", "conversion", "revenue", "commission", "activeDays", "bestDay"], `report-${week}.csv`));
+}
+
+// =====================================================================
+// Install as an app (PWA)
+// =====================================================================
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; document.querySelectorAll("[data-install]").forEach((b) => b.classList.remove("hidden")); });
+window.addEventListener("appinstalled", () => { installPrompt = null; toast("Installed. Open AR Leads from your home screen."); });
+if ("serviceWorker" in navigator && !["localhost", "127.0.0.1"].includes(location.hostname)) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+function installHtml() {
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone;
+  if (standalone) return `<p class="muted">✅ You're using the installed app.</p>`;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return `
+    <button class="primary ${installPrompt ? "" : "hidden"}" data-install>Install AR Leads</button>
+    <p class="muted small">${ios
+      ? "On iPhone: tap the Share button in Safari, then <b>Add to Home Screen</b>."
+      : "On Android or desktop Chrome/Edge: use the button above, or the browser menu → <b>Install app</b> / <b>Add to Home screen</b>."}</p>`;
 }

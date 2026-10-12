@@ -168,17 +168,19 @@ test("admin can assign, reassign and unassign", async () => {
 
 // ---------- calls and stats ----------
 function logCall(db, { uid = "w1", name = "Sam", leadId = "sam1", status = "No answer", callId = "c1",
-  day = "2026-10-12", week = "2026-10-12", prev = null, points, statOverride = {} } = {}) {
+  day = "2026-10-12", week = "2026-10-12", prev = null, points, statOverride = {}, value, callOverride = {} } = {}) {
+  const v = status === "Won" ? (value ?? 500) : 0;
   const p = points ?? 1 + (status === "Interested" ? 3 : 0) + (status === "Won" ? 10 : 0);
   const b = writeBatch(db);
   b.update(doc(db, `leads/${leadId}`), { status, notes: "n", lastCalledAt: serverTimestamp(), updatedAt: serverTimestamp() });
-  b.set(doc(db, `calls/${callId}`), { leadId, leadName: "Sam Barber", uid, userName: name, status, notes: "n", points: p, day, week, createdAt: serverTimestamp() });
-  const base = prev || { calls: 0, interested: 0, won: 0 };
+  b.set(doc(db, `calls/${callId}`), { leadId, leadName: "Sam Barber", uid, userName: name, status, notes: "n", points: p, day, week, createdAt: serverTimestamp(), ...(status === "Won" ? { value: v } : {}), ...callOverride });
+  const base = prev || { calls: 0, interested: 0, won: 0, revenue: 0 };
   const calls = base.calls + 1;
   const interested = base.interested + (status === "Interested" ? 1 : 0);
   const won = base.won + (status === "Won" ? 1 : 0);
   b.set(doc(db, `stats/${day}_${uid}`), {
-    uid, name, day, week, calls, interested, won, points: calls + 3 * interested + 10 * won, lastCallId: callId, ...statOverride,
+    uid, name, day, week, calls, interested, won, points: calls + 3 * interested + 10 * won, lastCallId: callId,
+    revenue: (base.revenue || 0) + v, ...statOverride,
   });
   return b.commit();
 }
@@ -244,6 +246,37 @@ test("search cache: active users read/write their own entries only", async () =>
   await assertSucceeds(getDoc(doc(as("w2"), "searchCache/k1")));
   await assertFails(setDoc(doc(as("w1"), "searchCache/k2"), { uid: "w2", leads: [] }));
   await assertFails(setDoc(doc(as("stranger"), "searchCache/k3"), { uid: "stranger", leads: [] }));
+});
+
+// ---------- deal values, commission, celebrations ----------
+test("Won calls carry a deal value that adds to revenue", async () => {
+  const db = as("w1");
+  await assertSucceeds(logCall(db, { status: "Won", callId: "c1", value: 750 }));
+  await assertSucceeds(logCall(db, { status: "Won", callId: "c2", value: 500, prev: { calls: 1, interested: 0, won: 1, revenue: 750 } }));
+  const s = await getDoc(doc(db, "stats/2026-10-12_w1"));
+  assert1(s.data().revenue === 1250, "revenue sums deal values");
+});
+
+test("can't fake revenue", async () => {
+  const db = as("w1");
+  await assertFails(logCall(db, { status: "Won", value: 500, statOverride: { revenue: 99999 } }));
+  await assertFails(logCall(db, { status: "No answer", statOverride: { revenue: 500 } }));
+  await assertFails(logCall(db, { status: "No answer", callOverride: { value: 500 } }));
+  await assertFails(logCall(db, { status: "Won", value: 1000000 }));
+});
+
+test("commission % is admin-only and 0-100", async () => {
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, commissionPct: 15 }));
+  await assertFails(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, commissionPct: 150 }));
+  await assertFails(setDoc(doc(as("w1"), "settings/team"), { dailyGoal: 30, commissionPct: 90 }));
+});
+
+test("celebrations: post your own, everyone active sees them", async () => {
+  await assertSucceeds(setDoc(doc(as("w1"), "celebrations/x1"), { uid: "w1", type: "won", text: "Sam just closed a deal" }));
+  await assertFails(setDoc(doc(as("w1"), "celebrations/x2"), { uid: "w2", type: "won", text: "fake" }));
+  await assertFails(setDoc(doc(as("w1"), "celebrations/x3"), { uid: "w1", type: "spam", text: "x" }));
+  await assertSucceeds(getDoc(doc(as("w2"), "celebrations/x1")));
+  await assertFails(getDoc(doc(as("off"), "celebrations/x1")));
 });
 
 function assert1(cond, msg) { if (!cond) throw new Error("Assertion failed: " + msg); }

@@ -55,7 +55,9 @@ service cloud.firestore {
       allow write: if isAdmin()
         && request.resource.data.dailyGoal is int
         && request.resource.data.dailyGoal >= 1
-        && request.resource.data.dailyGoal <= 500;
+        && request.resource.data.dailyGoal <= 500
+        && (!('commissionPct' in request.resource.data)
+            || (request.resource.data.commissionPct is number && request.resource.data.commissionPct >= 0 && request.resource.data.commissionPct <= 100));
     }
     // Google Maps data connection (Apify token): only signed-in team members can read it
     match /settings/integrations {
@@ -131,6 +133,9 @@ service cloud.firestore {
         && shortString(request.resource.data.notes, 2000)
         && request.resource.data.day is string
         && request.resource.data.week is string
+        && (request.resource.data.status == 'Won'
+            ? (request.resource.data.value is number && request.resource.data.value >= 0 && request.resource.data.value <= 100000)
+            : !('value' in request.resource.data) || request.resource.data.value == 0)
         && get(/databases/$(database)/documents/leads/$(request.resource.data.leadId)).data.assignedTo == request.auth.uid;
       allow update: if false;
       allow delete: if isAdmin();
@@ -150,6 +155,7 @@ service cloud.firestore {
       }
       function addsI() { return newCall().status == 'Interested' ? 1 : 0; }
       function addsW() { return newCall().status == 'Won' ? 1 : 0; }
+      function addsV() { return newCall().status == 'Won' ? newCall().value : 0; }
       function pointsOk() { return d().points == d().calls + 3 * d().interested + 10 * d().won; }
 
       allow read: if isActive();
@@ -160,6 +166,7 @@ service cloud.firestore {
         && d().week is string
         && callIsNewAndMine()
         && d().calls == 1 && d().interested == addsI() && d().won == addsW()
+        && d().get('revenue', 0) == addsV()
         && pointsOk();
       allow update: if isActive()
         && resource.data.uid == request.auth.uid
@@ -170,6 +177,7 @@ service cloud.firestore {
         && d().calls == resource.data.calls + 1
         && d().interested == resource.data.interested + addsI()
         && d().won == resource.data.won + addsW()
+        && d().get('revenue', 0) == resource.data.get('revenue', 0) + addsV()
         && pointsOk();
       allow delete: if isAdmin();
     }
@@ -179,6 +187,16 @@ service cloud.firestore {
       allow read: if isAdmin() || (isActive() && resource.data.uid == request.auth.uid);
       allow create: if isActive() && request.resource.data.uid == request.auth.uid;
       allow update, delete: if false;
+    }
+    // ---------- live team pop-ups ("Sam just closed a deal") ----------
+    match /celebrations/{id} {
+      allow read: if isActive();
+      allow create: if isActive()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.type in ['won', 'interested', 'badge', 'goal']
+        && shortString(request.resource.data.text, 200);
+      allow update: if false;
+      allow delete: if isAdmin();
     }
     match /events/{id} {
       allow read: if isAdmin();
