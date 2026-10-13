@@ -76,7 +76,23 @@ service cloud.firestore {
     // Google Maps data connection (Apify token): only signed-in team members can read it
     match /settings/integrations {
       allow read: if isActive();
-      allow write: if isAdmin() && shortString(request.resource.data.apifyToken, 200);
+      allow write: if isAdmin()
+        && (!('apifyToken' in request.resource.data) || shortString(request.resource.data.apifyToken, 200))
+        && (!('pageSpeedKey' in request.resource.data) || shortString(request.resource.data.pageSpeedKey, 100));
+    }
+    // Website packages (Starter / Pro / Premium): everyone reads, admin edits
+    match /settings/packages {
+      allow read: if isActive();
+      allow write: if isAdmin() && request.resource.data.list is list && request.resource.data.list.size() <= 6;
+    }
+    // Old website finder: shared results of website checks (team reuses them for 60 days)
+    match /siteChecks/{id} {
+      allow read: if isActive();
+      allow write: if isActive()
+        && request.resource.data.keys().hasOnly(['url', 'score', 'reasons', 'mobile', 'speed', 'https', 'full', 'checkedAt'])
+        && request.resource.data.score is int && request.resource.data.score >= 0 && request.resource.data.score <= 100
+        && request.resource.data.reasons is list && request.resource.data.reasons.size() <= 10
+        && request.resource.data.checkedAt == request.time;
     }
 
     // ---------- shared search results, so the team doesn't pay twice for the same search ----------
@@ -169,6 +185,7 @@ service cloud.firestore {
           && c.bonusW == (c.status == 'Won' && !hadWon(lead) ? 1 : 0)
           && c.points == c.counted + 3 * c.bonusI + 10 * c.bonusW
           && shortString(c.notes, 2000)
+          && (!('package' in c) || (c.status == 'Won' && shortString(c.package, 60)))
           && (c.bonusW == 1
               ? (c.value is number && c.value >= 0 && c.value <= 100000)
               : (!('value' in c) || c.value == 0));

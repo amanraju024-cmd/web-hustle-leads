@@ -405,3 +405,32 @@ test("presence: everyone updates their own heartbeat, only admin sees who's live
   await assertFails(getDoc(doc(as("w2"), "presence/w1")));
   await assertSucceeds(getDoc(doc(as("owner"), "presence/w1")));
 });
+
+test("packages: everyone reads, only admin edits", async () => {
+  const list = [{ name: "Starter", price: 500, items: ["Site"] }];
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/packages"), { list }));
+  await assertFails(setDoc(doc(as("w1"), "settings/packages"), { list }));
+  await assertSucceeds(getDoc(doc(as("w1"), "settings/packages")));
+});
+
+test("won calls can record the package; other results can't", async () => {
+  await assertSucceeds(logCall(as("w1"), { status: "Won", callId: "c1", value: 850, callOverride: { package: "Pro" } }));
+});
+test("package only on Won calls", async () => {
+  await assertFails(logCall(as("w1"), { status: "Interested", callId: "c2", callOverride: { package: "Pro" } }));
+});
+
+test("site checks: shared by the team, must look like a check", async () => {
+  const ok = { url: "http://a.com", score: 65, reasons: ["Not mobile-friendly"], mobile: false, speed: 20, https: false, full: true, checkedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(as("w1"), "siteChecks/a.com"), ok));
+  await assertSucceeds(getDoc(doc(as("w2"), "siteChecks/a.com")));
+  await assertFails(setDoc(doc(as("w1"), "siteChecks/b.com"), { ...ok, score: 500 }));
+  await assertFails(setDoc(doc(as("w1"), "siteChecks/c.com"), { ...ok, hacked: true }));
+  await assertFails(setDoc(doc(as("stranger"), "siteChecks/d.com"), ok));
+});
+
+test("integrations: admin saves the website-check key without wiping the Google token", async () => {
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/integrations"), { apifyToken: "apify_api_x" }));
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/integrations"), { pageSpeedKey: "AIzaTEST" }, { merge: true }));
+  await assertFails(setDoc(doc(as("w1"), "settings/integrations"), { pageSpeedKey: "AIzaMINE" }, { merge: true }));
+});

@@ -78,3 +78,18 @@ test("commission only counts once paid in full", () => {
   const s = commissionSplit(calls, new Map([["a", "paid"], ["b", "deposit"]]));
   assert.equal(s.paid, 100); assert.equal(s.pending, 30 + 100);
 });
+
+import { quickSignals, scoreSite, siteKey, oldLabel } from "../src/oldsite.js";
+test("old website scoring", () => {
+  assert.deepEqual(quickSignals("http://joesbarber.wixsite.com/home"), { https: false, builder: "Wix", host: "joesbarber.wixsite.com" });
+  assert.equal(quickSignals("https://modern.com.au").builder, null);
+  let r = scoreSite({ quick: quickSignals("http://joesbarber.wixsite.com"), full: { mobile: false, speed: 22, https: false, oldJquery: "jQuery 1.8.3" } });
+  assert.equal(r.score, 100);
+  assert.ok(r.reasons.includes("Not mobile-friendly") && r.reasons.includes("Free Wix address"));
+  r = scoreSite({ quick: quickSignals("https://modern.com.au"), full: { mobile: true, speed: 85, https: true } });
+  assert.equal(r.score, 0); assert.equal(oldLabel(r.score), "Looks OK");
+  r = scoreSite({ quick: quickSignals("https://dead.com.au"), full: { down: true } });
+  assert.equal(r.score, 60); assert.equal(oldLabel(60), "Very outdated");
+  assert.equal(scoreSite({ quick: quickSignals("http://old.com.au") }).score, 20);
+  assert.equal(siteKey("https://www.Old-Site.com.au/page"), "old-site.com.au");
+});

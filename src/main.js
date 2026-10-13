@@ -1,10 +1,11 @@
 // AR Methods Leads — app shell, routing and screens.
 import * as D from "./data.js";
-import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE, findPlaceForReview, reviewLink } from "./search.js";
+import { quickSignals, pageSpeed, scoreSite, siteKey, oldLabel, OLD_MIN, SetupError, CheckQuotaError } from "./oldsite.js";
+import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE, findPlaceForReview, reviewLink, leadKey } from "./search.js";
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
+  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -347,9 +348,9 @@ async function route() {
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
     home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews, chat: screenChat,
-    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand, care: screenCare,
+    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand, care: screenCare, packages: screenPackages, referrals: screenReferrals,
   };
-  const adminOnly = ["admin", "worker", "pool", "team", "report", "brand", "care"];
+  const adminOnly = ["admin", "worker", "pool", "team", "report", "brand", "care", "packages", "referrals"];
   let fn = routes[name] || screenHome;
   if (adminOnly.includes(name) && !isAdmin()) fn = screenHome;
   markTab(adminOnly.includes(name) ? "admin" : name);
@@ -454,8 +455,9 @@ try {
   const boot = uid && readBoot(uid);
   if (boot?.me?.active) {
     optimisticUid = uid;
-    Object.assign(state, { user: { uid }, me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "", brand: boot.brand || {} });
-    startApp();
+    Object.assign(state, { user: { uid }, me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "", brand: boot.brand || {}, packages: boot.packages || null });
+    // wait until this whole file has run, so every screen's helpers exist
+    queueMicrotask(() => { if (state.me && optimisticUid === uid) startApp(); });
   }
 } catch {}
 
@@ -507,6 +509,10 @@ D.onAuthStateChanged(D.auth, async (user) => {
     saveBoot(user.uid, { me, goal, googleToken, brand });
     Object.assign(state, { me, goal, googleToken });
     if (!boot?.me?.active || changed) startApp(); // first visit, or something changed: redraw with fresh data
+    D.getPackages().then((list) => {
+      state.packages = list;
+      try { saveBoot(user.uid, { ...readBoot(user.uid), packages: list }); } catch {}
+    }).catch(() => {});
   } catch (e) {
     console.error(e);
     renderBlocked("Couldn't load your account", D.authMessage(e));
@@ -625,12 +631,22 @@ async function screenHome() {
 // Find leads
 // =====================================================================
 function screenFind() {
-  setTitle("Find leads");
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem("arm_search") || "{}"); } catch {}
+  state.findMode = state.findMode || saved.mode || "none";
+  const old = state.findMode === "old";
+  setTitle(old ? "Old website finder" : "Find leads");
   view().innerHTML = `
-    <h1 class="page">Find leads</h1>
-    <form class="card search" id="searchForm" autocomplete="off">
+    <div class="find-modes" role="tablist" aria-label="What to find">
+      <button type="button" role="tab" class="find-mode ${old ? "" : "on"}" data-mode="none" aria-selected="${!old}">🔎 No website</button>
+      <button type="button" role="tab" class="find-mode old ${old ? "on" : ""}" data-mode="old" aria-selected="${old}">🕰️ Old website</button>
+    </div>
+    ${old ? `<section class="old-hero">
+        <span class="old-tag">Old website finder</span>
+        <h1 class="page">Businesses with outdated websites</h1>
+        <p>Every business here <b>already has a website</b>, but it looks old: not mobile-friendly, not secure, slow or on a free builder. Sell them a <b>redesign</b> ($800–$1,500). They already know they need a site.</p>
+      </section>` : `<h1 class="page">Find leads</h1>`}
+    <form class="card search ${old ? "search-old" : ""}" id="searchForm" autocomplete="off">
       <div><label for="suburb">Suburb</label><input id="suburb" placeholder="e.g. Willetton" maxlength="60" value="${esc(saved.suburb || "")}" required></div>
       <div><label for="trade">Business type</label>
         <select id="trade">${TRADES.map((t) => `<option value="${t.id}" ${t.id === saved.trade ? "selected" : ""}>${esc(t.label)}</option>`).join("")}</select></div>
@@ -650,6 +666,13 @@ function screenFind() {
     <div id="searchMsg"></div>
     <div id="results"></div>`;
   $("#searchForm").addEventListener("submit", runSearch);
+  document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
+    if (state.findMode === b.dataset.mode) return;
+    state.findMode = b.dataset.mode;
+    try { localStorage.setItem("arm_search", JSON.stringify({ ...JSON.parse(localStorage.getItem("arm_search") || "{}"), mode: state.findMode })); } catch {}
+    screenFind();
+    if (state.findMode === "old" && state.search) startOldChecks(state.search);
+  }));
   if (state.search) drawResults();
 }
 
@@ -660,7 +683,7 @@ async function runSearch(e) {
   const onlySuburb = $("#onlySuburb").checked;
   const coverage = $("#coverage")?.value || "quick";
   if (!suburb) return;
-  try { localStorage.setItem("arm_search", JSON.stringify({ suburb, trade: tradeId, only: onlySuburb, coverage })); } catch {}
+  try { localStorage.setItem("arm_search", JSON.stringify({ suburb, trade: tradeId, only: onlySuburb, coverage, mode: state.findMode })); } catch {}
   $("#searchMsg").innerHTML = "";
   await busy($("#searchBtn"), "Searching", async () => {
     try {
@@ -675,6 +698,7 @@ async function runSearch(e) {
       state.filter = c.none ? "none" : c.social ? "social" : "all";
       if (!result.cached) D.recordSearch(state.me, result);
       drawResults();
+      if (state.findMode === "old") startOldChecks(result);
       let pending = null;
       findHiddenWebsites(result.leads, () => {
         if (state.search !== result || pending) return;
@@ -694,6 +718,7 @@ function countKinds(leads) {
 }
 
 function drawResults() {
+  if (state.findMode === "old") return drawOldResults();
   const r = state.search;
   if (!r || !$("#results")) return;
   const c = countKinds(r.leads);
@@ -745,6 +770,118 @@ function resultCard(l) {
         <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}${l.rating ? ` · ★ ${Number(l.rating).toFixed(1)} (${Number(l.reviews) || 0})` : ""}</p>
         <p class="row">${phoneHtml(l.phone)} ${leadLinks(l)}</p>
         ${siteHint(l)}
+      </div>
+      <div class="lead-act">${action}</div>
+    </article>`;
+}
+
+// =====================================================================
+// Old website finder: checks every business that has a website
+// =====================================================================
+state.oldChecks = new Map();   // leadId → { status: "checking" | "done", score, reasons, full }
+let oldRun = 0;
+async function startOldChecks(result) {
+  const run = ++oldRun;
+  const sites = result.leads.filter((l) => l.websiteKind === "website" && safeUrl(l.website));
+  state.oldSetup = null;
+  if (state.psiKey === undefined) state.psiKey = await D.getPageSpeedKey().catch(() => "");
+  let key = state.psiKey || firebaseApiKey();
+  for (const l of sites) if (!state.oldChecks.has(l.id)) {
+    const q = scoreSite({ quick: quickSignals(l.website) });
+    state.oldChecks.set(l.id, { status: "checking", ...q });
+  }
+  drawResults();
+  let fullOn = true;
+  const queue = sites.filter((l) => state.oldChecks.get(l.id).status !== "done");
+  const worker = async () => {
+    while (queue.length && run === oldRun) {
+      const l = queue.shift();
+      const quick = quickSignals(l.website);
+      const id = siteKey(l.website);
+      let saved = null;
+      try { saved = await D.getSiteCheck(id); } catch {}
+      const fresh = saved && toDate(saved.checkedAt) && Date.now() - toDate(saved.checkedAt).getTime() < 60 * 864e5;
+      let out;
+      if (fresh && (saved.full || !fullOn)) out = { score: saved.score, reasons: saved.reasons, full: saved.full };
+      else if (!fullOn) out = { ...scoreSite({ quick }), full: false };
+      else {
+        try {
+          const full = await pageSpeed(l.website, key);
+          out = { ...scoreSite({ quick, full }), full: !full.timedOut && !full.error, mobile: full.mobile ?? null, speed: full.speed ?? null };
+          D.saveSiteCheck(id, { url: l.website, score: out.score, reasons: out.reasons, mobile: out.mobile, speed: out.speed, https: full.https ?? quick.https, full: out.full }).catch(() => {});
+        } catch (e) {
+          if (e instanceof SetupError || e instanceof CheckQuotaError) { fullOn = false; state.oldSetup = e instanceof SetupError ? "setup" : "quota"; }
+          out = { ...scoreSite({ quick }), full: false };
+        }
+      }
+      if (run !== oldRun) return;
+      state.oldChecks.set(l.id, { status: "done", ...out });
+      l.oldSite = { score: out.score, reasons: out.reasons, label: oldLabel(out.score) };
+      drawResults();
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+}
+const firebaseApiKey = () => { try { return D.app.options.apiKey; } catch { return ""; } };
+
+function drawOldResults() {
+  const r = state.search;
+  if (!r || !$("#results")) return;
+  const sites = r.leads.filter((l) => l.websiteKind === "website" && safeUrl(l.website));
+  const checks = sites.map((l) => ({ l, c: state.oldChecks.get(l.id) || { status: "checking", score: 0, reasons: [] } }));
+  const checking = checks.filter((x) => x.c.status === "checking").length;
+  const outdated = checks.filter((x) => x.c.score >= OLD_MIN);
+  state.oldFilter = state.oldFilter || "outdated";
+  const shown = (state.oldFilter === "all" ? checks : checks.filter((x) => x.c.score >= OLD_MIN || x.c.status === "checking"))
+    .sort((a, b) => b.c.score - a.c.score || (a.c.status === "checking") - (b.c.status === "checking"));
+  const done = sites.length - checking;
+  $("#results").innerHTML = `
+    ${state.oldSetup === "setup" ? `<div class="notice warn old-setup">${isAdmin()
+      ? `<b>Full website checks aren't switched on yet</b>, so only quick checks ran (no padlock, free builder address). To also catch <b>not mobile-friendly</b> and <b>slow</b> sites (free, no card, 2 minutes):
+        <ol><li>Open <a href="https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com?project=armethods" target="_blank" rel="noopener">PageSpeed Insights API</a> (project <b>armethods</b>) and click <b>Enable</b>.</li>
+        <li>Go to <a href="https://console.cloud.google.com/apis/credentials?project=armethods" target="_blank" rel="noopener">Credentials</a> → <b>Create credentials → API key</b>. Copy it.</li>
+        <li>Paste it here: <span class="inline"><input id="psiKey" placeholder="AIza…" maxlength="100"><button class="primary small" id="psiSave">Save</button></span></li></ol>`
+      : "Only quick website checks are on. Ask Aman to switch on full checks to find more outdated sites."}</div>`
+      : state.oldSetup === "quota" ? `<div class="notice warn">Today's free full website checks are used up, so the rest got quick checks only. They reset tomorrow.</div>` : ""}
+    ${checking ? `<div class="notice info old-progress"><span class="spinner"></span>Checking websites… ${done} of ${sites.length} done. Each full check takes about 10–20 seconds.</div>` : ""}
+    <div class="chips" role="group" aria-label="Filter results">
+      <button type="button" class="chip ${state.oldFilter === "outdated" ? "on" : ""}" data-of="outdated">🕰️ Outdated (${outdated.length})</button>
+      <button type="button" class="chip ${state.oldFilter === "all" ? "on" : ""}" data-of="all">All with websites (${sites.length})</button>
+    </div>
+    <p class="muted small">${esc(r.trade.label)} in ${esc(r.suburb)} · ${sites.length} of ${r.leads.length} businesses have a website. Results are saved for the team for 60 days.</p>
+    <div class="list">${shown.length ? shown.map(({ l, c }) => oldCard(l, c)).join("")
+      : `<div class="empty">${sites.length ? (checking ? "Still checking…" : "None of these websites look outdated. Try another business type or suburb.") : "None of these businesses have a website listed. Switch to 🔎 No website to call them instead."}</div>`}</div>`;
+  document.querySelectorAll("[data-of]").forEach((b) => b.addEventListener("click", () => { state.oldFilter = b.dataset.of; drawOldResults(); }));
+  document.querySelectorAll("[data-claim]").forEach((b) => b.addEventListener("click", () => doClaim(b)));
+  $("#psiSave")?.addEventListener("click", async (e) => {
+    const k = $("#psiKey").value.trim();
+    if (!/^AIza[\w-]{20,}$/.test(k)) return toast("That doesn't look like a Google API key (it starts with AIza).", "bad");
+    await busy(e.currentTarget, "Saving", async () => {
+      try {
+        await D.setPageSpeedKey(k); state.psiKey = k; toast("Saved. Re-checking websites…");
+        state.oldChecks = new Map(); startOldChecks(state.search);
+      } catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+  });
+}
+
+function oldCard(l, c) {
+  const claim = state.claims.get(l.id);
+  const action = claim
+    ? (claim.uid === state.me.id ? `<span class="pill mine">Yours ✓</span>` : `<span class="pill taken">Taken by ${esc(claim.name)}</span>`)
+    : `<button class="primary small" data-claim="${esc(l.id)}">Claim</button>`;
+  const level = c.status === "checking" ? "checking" : c.score >= 50 ? "very" : c.score >= OLD_MIN ? "some" : "ok";
+  const site = safeUrl(l.website);
+  return `
+    <article class="lead old-lead old-${level}">
+      <div class="lead-main">
+        <h3>${esc(l.name)} <span class="old-badge old-${level}">${c.status === "checking" && !c.score ? "Checking…" : `🕰️ ${esc(oldLabel(c.score))} · ${c.score}`}</span></h3>
+        <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}${l.rating ? ` · ★ ${Number(l.rating).toFixed(1)} (${Number(l.reviews) || 0})` : ""}</p>
+        ${c.reasons?.length ? `<div class="old-reasons">${c.reasons.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
+        ${c.status === "checking" ? `<p class="small muted"><span class="spinner"></span>Running full check…</p>` : !c.full ? `<p class="small muted">Quick check only</p>` : ""}
+        <p class="row">${phoneHtml(l.phone)} ${site ? `<a href="${esc(site)}" target="_blank" rel="noopener">View their website ↗</a>` : ""}
+          <a href="https://www.google.com/search?q=${encodeURIComponent(`${l.name} ${l.suburb} WA`)}" target="_blank" rel="noopener">Check Google</a>
+          <a href="${esc(safeUrl(l.mapsUrl) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${l.name} ${l.suburb} WA`)}`)}" target="_blank" rel="noopener">Map</a></p>
       </div>
       <div class="lead-act">${action}</div>
     </article>`;
@@ -821,11 +958,13 @@ function drawMyLeads() {
   const queueSize = callQueue(leads).length;
   body.innerHTML = `
     ${queueSize ? `<button class="primary callmode-start" data-callmode>📞 Start call mode <span>${queueSize} to call, hottest first</span></button>` : ""}
+    <div class="toolbar"><button class="ghost small" data-addref>🤝 Add a referral</button></div>
     <div class="chips">${Object.keys(groups).map((k) =>
       `<button class="chip ${state.leadFilter === k ? "on" : ""}" data-lf="${esc(k)}">${esc(label[k] || k)} (${leads.filter(groups[k]).length})</button>`).join("")}</div>
     <div class="list">${shown.length ? shown.map((l) => myLeadCard(l, now)).join("")
       : `<div class="empty">${leads.length ? "No leads in this group." : `No leads yet. <a href="#find">Find and claim some</a>.`}</div>`}</div>`;
   body.querySelectorAll("[data-lf]").forEach((b) => b.addEventListener("click", () => { state.leadFilter = b.dataset.lf; drawMyLeads(); }));
+  body.querySelector("[data-addref]")?.addEventListener("click", () => showReferralForm());
   body.querySelector("[data-callmode]")?.addEventListener("click", () => { state.callMode = true; state.callDone = new Set(); setPresencePage("callmode"); window.scrollTo(0, 0); drawMyLeads(); });
   body.querySelectorAll("article[data-id]").forEach(wireLeadCard);
 }
@@ -837,6 +976,18 @@ function toLocalInput(ts) {
   return p.toISOString().slice(0, 16);
 }
 function fromLocalInput(v) { return v ? D.Timestamp.fromDate(new Date(v + ":00+08:00")) : null; }
+
+const packages = () => (Array.isArray(state.packages) && state.packages.length ? state.packages : DEFAULT_PACKAGES);
+
+function packagePicker(l) {
+  const list = packages();
+  return `<div class="pkg-pick" role="radiogroup" aria-label="Package">
+    ${list.map((p, i) => `<button type="button" class="pkg ${i === 0 ? "on" : ""}" data-pkg="${i}" role="radio" aria-checked="${i === 0}">
+      <span class="pkg-top"><b>${esc(p.name)}</b><span class="pkg-price">${esc(money(p.price))}</span></span>
+      <ul>${(p.items || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></button>`).join("")}
+    <button type="button" class="pkg custom" data-pkg="custom" role="radio" aria-checked="false"><span class="pkg-top"><b>Custom</b><span class="pkg-price">Any $</span></span><ul><li>Type the amount below</li></ul></button>
+  </div>`;
+}
 
 function payHtml(l) {
   const cur = PAY_STEPS.findIndex(([k]) => k === payOf(l));
@@ -869,19 +1020,20 @@ function myLeadCard(l, now) {
   return `
     <article class="lead mylead ${due && due < now ? "overdue" : ""}" data-id="${esc(l.id)}">
       <div class="lead-main">
-        <h3>${esc(l.name)} ${scoreChip(l)} <span class="badge ${esc(l.websiteKind)}">${KIND_LABEL[l.websiteKind] || ""}</span> <span class="status s-${esc(l.status.replace(/\s/g, ""))}">${esc(l.status)}</span></h3>
+        <h3>${esc(l.name)} ${scoreChip(l)} ${l.oldSite ? `<span class="old-badge old-${l.oldSite.score >= 50 ? "very" : "some"}">🕰️ Redesign</span>` : `<span class="badge ${esc(l.websiteKind)}">${KIND_LABEL[l.websiteKind] || ""}</span>`} ${l.referredBy ? `<span class="ref-badge">🤝 Referred by ${esc(l.referredBy.name)}</span>` : ""} <span class="status s-${esc(l.status.replace(/\s/g, ""))}">${esc(l.status)}</span></h3>
         <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}${l.lastCalledAt ? " · last called " + esc(fmtDateTime(l.lastCalledAt)) : ""}</p>
         ${due ? `<p class="due-line">Call back ${esc(fmtDateTime(l.callbackAt))}</p>` : ""}
         <p class="row">${phoneHtml(l.phone)} <button class="linkbtn" data-texts>💬 Texts</button> ${leadLinks(l)}</p>
-        ${siteHint(l)}
+        ${l.oldSite?.reasons?.length ? `<div class="old-reasons">${l.oldSite.reasons.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : siteHint(l)}
         ${D.hadWon(l) ? payHtml(l) : ""}
         <div class="log">
           <label for="n-${esc(l.id)}">Notes</label>
           <textarea id="n-${esc(l.id)}" rows="2" maxlength="2000" placeholder="Who you spoke to, what they said…">${esc(l.notes)}</textarea>
           <div class="cb ${l.status === "Call back" ? "" : "hidden"}"><label for="c-${esc(l.id)}">Call back at (Perth time)</label>
             <input type="datetime-local" id="c-${esc(l.id)}" value="${esc(toLocalInput(l.callbackAt))}"></div>
-          <div class="deal hidden"><label for="v-${esc(l.id)}">Deal amount (what they're paying you)</label>
-            <div class="inline"><span class="cur">$</span><input type="number" inputmode="decimal" min="0" max="100000" step="1" id="v-${esc(l.id)}" value="500"></div>
+          <div class="deal hidden"><p class="small muted pkg-label">Which package did they buy?</p>${packagePicker(l)}
+            <label for="v-${esc(l.id)}">Deal amount (what they're paying you)</label>
+            <div class="inline"><span class="cur">$</span><input type="number" inputmode="decimal" min="0" max="100000" step="1" id="v-${esc(l.id)}" value="${esc(String(packages()[0]?.price ?? 500))}"></div>
             <p class="small muted">Commission: <b data-comm>$100</b></p></div>
           <p class="small muted">Log this call as:</p>
           <div class="outcomes">${D.CALL_STATUSES.map((s) => `<button class="out o-${s.replace(/\s/g, "")}" data-status="${esc(s)}">${esc(s)}</button>`).join("")}</div>
@@ -935,6 +1087,15 @@ function wireLeadCard(card) {
   const dealInput = card.querySelector('input[type="number"]');
   const commEl = card.querySelector("[data-comm]");
   dealInput.addEventListener("input", () => { commEl.textContent = money(commissionFor(dealInput.value)); });
+  let pkgName = packages()[0]?.name || "";
+  card.querySelectorAll("[data-pkg]").forEach((b) => b.addEventListener("click", () => {
+    card.querySelectorAll("[data-pkg]").forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", String(x === b)); });
+    if (b.dataset.pkg === "custom") { pkgName = ""; dealInput.focus(); dealInput.select(); return; }
+    const p = packages()[Number(b.dataset.pkg)];
+    pkgName = p.name;
+    dealInput.value = p.price;
+    commEl.textContent = money(commissionFor(p.price));
+  }));
   card.querySelectorAll("[data-status]").forEach((btn) => btn.addEventListener("click", async () => {
     const status = btn.dataset.status;
     if (status === "Call back" && !cbInput.value) {
@@ -948,14 +1109,14 @@ function wireLeadCard(card) {
       dealBox.classList.remove("hidden");
       dealInput.focus();
       dealInput.select();
-      toast("Enter the deal amount, then tap Won again.");
+      toast("Pick the package (or type the amount), then tap Won again.");
       return;
     }
     if (status === "Won" && !(Number(dealInput.value) > 0)) return toast("Enter what they're paying (more than $0).", "bad");
     await busy(btn, "Saving", async () => {
       try {
         const value = status === "Won" ? Number(dealInput.value) : 0;
-        const got = await D.logCall(state.me, lead, status, notes.value, status === "Call back" ? fromLocalInput(cbInput.value) : null, value);
+        const got = await D.logCall(state.me, lead, status, notes.value, status === "Call back" ? fromLocalInput(cbInput.value) : null, value, status === "Won" ? pkgName : "");
         if (state.callMode) state.callDone?.add(lead.id);
         document.activeElement?.blur();
         const why = !got.points ? (status === "Interested" ? " (already counted: Interested points only count once per lead)" : " (already counted today: each lead counts once a day)") : "";
@@ -986,10 +1147,15 @@ function showAfterWon(lead, value) {
           <button type="submit" class="primary small">They said yes: add care plan</button></form></div>
       <div class="upsell-step"><b>2. Tap-to-review cards (${esc(NFC.price)})</b><p>${esc(NFC.pitch)}</p>
         ${isAdmin() ? `<a class="ghost small" href="#reviews/${encodeURIComponent([lead.name, lead.suburb].filter(Boolean).join(" "))}" data-close>Make their review card link →</a>` : ""}</div>
-      <div><b>3. Referral (free leads)</b><p>${esc(AFTER_WON.referral)}</p></div>
+      <div><b>3. Referral (free leads)</b><p>${esc(AFTER_WON.referral)}</p>
+        <button type="button" class="ghost small" data-ref-from>🤝 They gave me one: add it</button></div>
       <div><b>4. Review (more trust)</b><p>${esc(AFTER_WON.review)}</p></div>
     </div>`);
   wireCarePresets(document);
+  $("[data-ref-from]")?.addEventListener("click", () => {
+    document.querySelector(".modal-wrap .wide-btn")?.click();
+    setTimeout(() => showReferralForm({ leadId: lead.id, name: lead.name }), 350);
+  });
   const form = $("#careQuick");
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1086,7 +1252,7 @@ function screenAccount() {
 // =====================================================================
 function adminNav(active) {
   return `<div class="subnav">
-    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["care", "Care plans"], ["team", "Team"], ["brand", "Brand kit"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
+    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["care", "Care plans"], ["referrals", "Referrals"], ["packages", "Packages"], ["team", "Team"], ["brand", "Brand kit"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
   </div>`;
 }
 
@@ -1316,7 +1482,7 @@ async function screenWorker(uid) {
       return `<section class="card"><h2>Deals won</h2>
       ${deals.length ? (() => { const sp = commissionSplit(deals, new Map(wonLeads.map((l) => [l.id, payOf(l)]))); return `<p class="muted small">Commission owed (paid deals): <b>${esc(money(sp.paid))}</b>${sp.pending ? ` · ${esc(money(sp.pending))} pending until clients pay` : ""}</p>`; })() : ""}
       ${deals.length ? `<div class="tablewrap"><table class="board"><thead><tr><th>When</th><th>Business</th><th class="n">Amount</th><th class="n">Commission</th><th>Payment</th><th></th></tr></thead><tbody>
-        ${deals.map((c) => `<tr><td>${esc(fmtDateTime(c.createdAt))}</td><td>${esc(c.leadName)}</td><td class="n"><b>${esc(money(c.value))}</b>${c.editedAt ? ' <span class="muted small" title="Edited by admin">(edited)</span>' : ""}</td>
+        ${deals.map((c) => `<tr><td>${esc(fmtDateTime(c.createdAt))}</td><td>${esc(c.leadName)}${c.package ? ` <span class="pkg-tag">${esc(c.package)}</span>` : ""}</td><td class="n"><b>${esc(money(c.value))}</b>${c.editedAt ? ' <span class="muted small" title="Edited by admin">(edited)</span>' : ""}</td>
           <td class="n">${esc(money(commissionFor(c.value)))}</td>
           <td>${leadById.has(c.leadId) ? `<select class="pay-select pay-${esc(payOf(leadById.get(c.leadId)))}" data-pay-lead="${esc(c.leadId)}" aria-label="Payment">${PAY_STEPS.map(([k, label]) => `<option value="${k}" ${payOf(leadById.get(c.leadId)) === k ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>` : '<span class="muted">—</span>'}</td>
           <td><button class="linkbtn" data-edit-deal="${esc(c.id)}">Edit amount</button></td></tr>`).join("")}
@@ -1566,6 +1732,142 @@ function roastFor(calls, goal, name) {
 // =====================================================================
 // Review cards: Google review links for NFC cards, plus the upsell
 // =====================================================================
+// =====================================================================
+// Referrals
+// =====================================================================
+async function showReferralForm(from = null) {
+  let clients = (state.myLeads || []).filter((l) => D.hadWon(l));
+  if (isAdmin()) clients = await D.getLeadsWithStatus("Won").catch(() => clients);
+  if (from && !clients.some((c) => c.id === from.leadId)) clients.unshift({ id: from.leadId, name: from.name });
+  showModal(`<h2>🤝 Add a referral</h2>
+    <p class="muted small">A business one of your clients told you about. Referrals close far more often, so they go to the top of your list.</p>
+    <form id="refForm" class="ref-form">
+      <label for="rName">Business name</label><input id="rName" maxlength="120" required>
+      <label for="rPhone">Phone</label><input id="rPhone" type="tel" maxlength="30" required>
+      <div class="ref-grid">
+        <div><label for="rSuburb">Suburb</label><input id="rSuburb" maxlength="60" required></div>
+        <div><label for="rType">Business type</label><select id="rType">${TRADES.map((t) => `<option>${esc(t.label)}</option>`).join("")}<option>Other</option></select></div>
+      </div>
+      <label for="rFrom">Referred by</label>
+      <select id="rFrom" required><option value="">Choose the client…</option>${clients.map((c) => `<option value="${esc(c.id)}" ${from?.leadId === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
+      <p class="small muted">If they buy, ${esc(clients.find((c) => c.id === from?.leadId)?.name || "the client")} earns a ${esc(money(REFERRAL_REWARD))} thank-you.</p>
+      <button type="submit" class="primary wide">Add referral</button>
+    </form>`);
+  $("#rFrom").addEventListener("change", () => {
+    const c = clients.find((x) => x.id === $("#rFrom").value);
+    $("#refForm .small.muted").textContent = `If they buy, ${c?.name || "the client"} earns a ${money(REFERRAL_REWARD)} thank-you.`;
+  });
+  $("#refForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("#rName").value.trim(), phone = $("#rPhone").value.trim(), suburb = $("#rSuburb").value.trim();
+    const client = clients.find((c) => c.id === $("#rFrom").value);
+    if (!name || !phone || !suburb || !client) return toast("Fill in every field", "bad");
+    if (!cleanPhone(phone).valid) return toast("That phone number doesn't look right", "bad");
+    const lead = { name, phone: cleanPhone(phone).display, suburb, category: $("#rType").value, websiteKind: "none", source: "Referral", referredBy: { leadId: client.id, name: client.name } };
+    lead.id = leadKey(lead);
+    await busy(e.submitter || $("#refForm button[type=submit]"), "Adding", async () => {
+      try {
+        await D.addReferral(state.me, lead);
+        document.querySelector(".modal-wrap .wide-btn")?.click();
+        toast(`${name} added. It's in My leads with a 🤝 badge.`);
+        confetti();
+      } catch (err) {
+        toast(err instanceof D.TakenError ? `${name} is already in the system (${err.takenBy} has it).` : D.authMessage(err), "bad");
+      }
+    });
+  });
+}
+
+async function screenReferrals() {
+  setTitle("Referrals");
+  const rid = state.routeId;
+  view().innerHTML = `${adminNav("referrals")}<h1 class="page">Referrals</h1><div id="refBody"><div class="loading"><span class="spinner"></span></div></div>`;
+  const [refs, wonCalls] = await Promise.all([D.getReferrals(), D.getWonCalls().catch(() => [])]);
+  if (rid !== state.routeId || !$("#refBody")) return;
+  const valueBy = new Map(wonCalls.map((c) => [c.leadId, c.value]));
+  const won = refs.filter((l) => D.hadWon(l));
+  const owed = won.filter((l) => !l.referralRewardPaid);
+  const sales = won.reduce((n, l) => n + (valueBy.get(l.id) || 0), 0);
+  const byClient = new Map();
+  refs.forEach((l) => { const k = l.referredBy?.name || "Unknown"; byClient.set(k, (byClient.get(k) || 0) + 1); });
+  const top = [...byClient.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const sorted = refs.slice().sort((a, b) => (D.hadWon(b) - D.hadWon(a)) || ((toDate(b.createdAt) || 0) - (toDate(a.createdAt) || 0)));
+  $("#refBody").innerHTML = `
+    <section class="tiles">
+      <div class="tile"><span>Referrals</span><b class="num">${refs.length}</b><small>businesses clients sent you</small></div>
+      <div class="tile"><span>Became clients</span><b class="num">${won.length}</b><small>${refs.length ? pct(won.length / refs.length) + " close rate" : ""}</small></div>
+      <div class="tile"><span>Sales from referrals</span><b class="num">${money(sales)}</b></div>
+      <div class="tile ref-owed"><span>Rewards to pay</span><b class="num">${money(owed.length * REFERRAL_REWARD)}</b><small>${owed.length} × ${money(REFERRAL_REWARD)} thank-you</small></div>
+    </section>
+    ${top.length ? `<section class="card"><h2>Best referrers</h2><ul class="plain">${top.map(([n, c]) => `<li class="due"><b>${esc(n)}</b><span>${c} referral${c === 1 ? "" : "s"}</span></li>`).join("")}</ul></section>` : ""}
+    <section class="card"><h2>All referrals</h2>
+      ${refs.length ? `<div class="tablewrap"><table class="board"><thead><tr><th>Business</th><th>Referred by</th><th>Worker</th><th>Status</th><th class="n">Sale</th><th>Reward</th></tr></thead><tbody>
+        ${sorted.map((l) => {
+          const isWon = D.hadWon(l);
+          return `<tr><td><b>${esc(l.name)}</b><br><small class="muted">${esc(l.suburb)} · ${esc(l.phone || "")}</small></td><td>${esc(l.referredBy?.name || "")}</td><td>${esc(l.assignedName || "—")}</td>
+            <td><span class="status s-${esc((l.status || "New").replace(/\s/g, ""))}">${esc(l.status || "New")}</span></td>
+            <td class="n">${isWon && valueBy.get(l.id) ? esc(money(valueBy.get(l.id))) : "—"}</td>
+            <td>${!isWon ? '<span class="muted">When they buy</span>'
+              : l.referralRewardPaid ? `<span class="pay-tag pay-paid">Paid ✓</span> <button class="linkbtn" data-rpay="${esc(l.id)}" data-v="0">Undo</button>`
+              : `<span class="pay-tag">Owed ${esc(money(REFERRAL_REWARD))}</span> <button class="linkbtn" data-rpay="${esc(l.id)}" data-v="1">Mark paid</button>`}</td></tr>`;
+        }).join("")}</tbody></table></div>` : `<div class="empty">No referrals yet. After every sale, ask: “Do you know any other business owners who need a website?” Then tap 🤝 Add a referral in My leads.</div>`}
+    </section>`;
+  $("#refBody").querySelectorAll("[data-rpay]").forEach((b) => b.addEventListener("click", async () => {
+    try { await D.markReferralRewardPaid(b.dataset.rpay, b.dataset.v === "1"); toast(b.dataset.v === "1" ? "Reward marked as paid" : "Marked as not paid"); screenReferrals(); }
+    catch (err) { toast(D.authMessage(err), "bad"); }
+  }));
+}
+
+// =====================================================================
+// Packages (admin): what's in Starter / Pro / Premium
+// =====================================================================
+function screenPackages() {
+  setTitle("Packages");
+  let list = JSON.parse(JSON.stringify(packages()));
+  const draw = () => {
+    view().innerHTML = `${adminNav("packages")}<h1 class="page">Website packages</h1>
+      <p class="muted">These show up when someone marks a deal as Won: they pick the package and the price fills in. Edit what's included anytime.</p>
+      <form id="pkgForm">
+        <div class="pkg-edit-list">${list.map((p, i) => `<section class="card pkg-edit" data-i="${i}">
+          <div class="pkg-edit-head">
+            <div><label>Name</label><input data-f="name" maxlength="40" value="${esc(p.name)}" required></div>
+            <div><label>Price ($)</label><input data-f="price" type="number" min="0" max="100000" step="1" value="${esc(String(p.price))}" required></div>
+            <button type="button" class="linkbtn danger" data-del="${i}" ${list.length <= 1 ? "disabled" : ""}>Remove</button>
+          </div>
+          <label>What's included (one per line)</label>
+          <textarea data-f="items" rows="5" maxlength="1000">${esc((p.items || []).join("\n"))}</textarea>
+        </section>`).join("")}</div>
+        <div class="toolbar">
+          ${list.length < 6 ? `<button type="button" class="ghost" id="pkgAdd">+ Add a package</button>` : ""}
+          <button type="button" class="linkbtn" id="pkgReset">Reset to the original three</button>
+          <button type="submit" class="primary">Save packages</button>
+        </div>
+      </form>`;
+    const read = () => { list = [...view().querySelectorAll(".pkg-edit")].map((sec) => ({
+      name: sec.querySelector('[data-f="name"]').value.trim(),
+      price: Math.max(0, Math.round(Number(sec.querySelector('[data-f="price"]').value) || 0)),
+      items: sec.querySelector('[data-f="items"]').value.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 12),
+    })); };
+    view().querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => { read(); list.splice(Number(b.dataset.del), 1); draw(); }));
+    $("#pkgAdd")?.addEventListener("click", () => { read(); list.push({ name: "New package", price: 0, items: [] }); draw(); });
+    $("#pkgReset").addEventListener("click", () => { if (confirm("Reset to Starter, Pro and Premium?")) { list = JSON.parse(JSON.stringify(DEFAULT_PACKAGES)); draw(); } });
+    $("#pkgForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      read();
+      if (list.some((p) => !p.name)) return toast("Every package needs a name", "bad");
+      await busy(e.submitter || $("#pkgForm button[type=submit]"), "Saving", async () => {
+        try {
+          await D.savePackages(list);
+          state.packages = list;
+          try { saveBoot(state.me.id, { ...readBoot(state.me.id), packages: list }); } catch {}
+          toast("Packages saved");
+        } catch (err) { toast(D.authMessage(err), "bad"); }
+      });
+    });
+  };
+  draw();
+}
+
 // =====================================================================
 // Care plans (admin): monthly recurring income
 // =====================================================================

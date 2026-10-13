@@ -97,7 +97,7 @@ export async function getGoogleToken() {
   const snap = await getDoc(doc(db, "settings", "integrations"));
   return snap.exists() ? snap.data().apifyToken || "" : "";
 }
-export const setGoogleToken = (token) => setDoc(doc(db, "settings", "integrations"), { apifyToken: token, updatedAt: serverTimestamp() });
+export const setGoogleToken = (token) => setDoc(doc(db, "settings", "integrations"), { apifyToken: token, updatedAt: serverTimestamp() }, { merge: true });
 
 /** Shared search results (7 days) so the team doesn't spend credit on the same search twice. */
 export function searchCache(me) {
@@ -148,6 +148,8 @@ function leadDoc(lead, assignedTo, assignedName, createdBy) {
     category: lead.category || "", website: lead.website || "", websiteKind: lead.websiteKind || "none",
     maybeSite: lead.maybeSite || "", mapsUrl: lead.mapsUrl || "",
     rating: lead.rating ?? null, reviews: lead.reviews ?? 0,
+    ...(lead.referredBy ? { referredBy: lead.referredBy } : {}),
+    ...(lead.oldSite ? { oldSite: lead.oldSite } : {}),
     source: lead.source || "", lat: lead.lat ?? null, lon: lead.lon ?? null,
     assignedTo, assignedName, status: "New", notes: "", callbackAt: null, lastCalledAt: null,
     createdBy, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
@@ -232,7 +234,7 @@ export const hadWon = (l) => l.gotWon ?? l.status === "Won";
  *  - Interested (+3) and Won (+10 and the deal value) can each be earned once per lead, ever
  * Returns what this call earned: { counted, bonusI, bonusW, points }.
  */
-export async function logCall(me, lead, status, notes, callbackAt, dealValue = 0) {
+export async function logCall(me, lead, status, notes, callbackAt, dealValue = 0, packageName = "") {
   const day = perthDay();
   const week = weekStart(day);
   const leadRef = doc(db, "leads", lead.id);
@@ -261,6 +263,7 @@ export async function logCall(me, lead, status, notes, callbackAt, dealValue = 0
     tx.set(callRef, {
       leadId: lead.id, leadName: lead.name, uid: me.id, userName: me.name, status, notes,
       counted, bonusI, bonusW, points, day, week, createdAt: serverTimestamp(), ...(bonusW ? { value } : {}),
+      ...(status === "Won" && packageName ? { package: String(packageName).slice(0, 60) } : {}),
     });
     tx.set(statRef, {
       uid: me.id, name: me.name, day, week, calls, interested, won,
@@ -311,6 +314,38 @@ export async function getWonCalls() {
   const snap = await getDocs(query(collection(db, "calls"), where("status", "==", "Won")));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => c.value > 0);
 }
+
+// ---------- packages ----------
+export async function getPackages() {
+  const snap = await getDoc(doc(db, "settings", "packages"));
+  return snap.exists() && Array.isArray(snap.data().list) && snap.data().list.length ? snap.data().list : null;
+}
+export const savePackages = (list) => setDoc(doc(db, "settings", "packages"), { list });
+
+// ---------- referrals ----------
+/** Adds a business a client referred, claimed by me straight away. */
+export async function addReferral(me, lead) {
+  await claimLead(me, lead);
+  logEvent(me, "referral", `added referral ${lead.name} (from ${lead.referredBy?.name || "a client"})`, { leadId: lead.id });
+}
+export async function getReferrals() {
+  const snap = await getDocs(query(collection(db, "leads"), where("source", "==", "Referral")));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+export const markReferralRewardPaid = (leadId, paid) =>
+  updateDoc(doc(db, "leads", leadId), { referralRewardPaid: paid, updatedAt: serverTimestamp() });
+
+// ---------- old website checks (shared cache) ----------
+export async function getSiteCheck(id) {
+  const snap = await getDoc(doc(db, "siteChecks", id));
+  return snap.exists() ? snap.data() : null;
+}
+export const saveSiteCheck = (id, data) => setDoc(doc(db, "siteChecks", id), { ...data, checkedAt: serverTimestamp() });
+export async function getPageSpeedKey() {
+  const snap = await getDoc(doc(db, "settings", "integrations"));
+  return snap.exists() ? snap.data().pageSpeedKey || "" : "";
+}
+export const setPageSpeedKey = (key) => setDoc(doc(db, "settings", "integrations"), { pageSpeedKey: key }, { merge: true });
 
 // ---------- stats ----------
 export function watchStats(field, value, cb, onErr) {

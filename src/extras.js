@@ -38,6 +38,21 @@ const FEATURES = {
 export function scriptFor(lead, me) {
   const g = groupOf(lead.category);
   const first = (me?.name || "").split(" ")[0] || "I";
+  if (lead.oldSite) {
+    const why = (lead.oldSite.reasons || [])[0] || "looking a bit dated";
+    const problem = /mobile/i.test(why) ? "it doesn't display properly on phones, and most of your customers are looking you up on their phone"
+      : /load/i.test(why) ? "it wasn't loading when I tried it, so anyone searching for you right now hits a dead end"
+      : /padlock|secure/i.test(why) ? "browsers mark it as 'Not secure', which scares a lot of customers off before they even read it"
+      : /slow/i.test(why) ? "it's really slow on phones, and most people give up after a few seconds and call the next business"
+      : /free/i.test(why) ? "it's on a free builder address, which makes the business look smaller than it is"
+      : "it's looking a bit dated compared to other businesses nearby";
+    return {
+      opener: `Hi, is this the owner of ${lead.name}? My name's ${first}, I'm with AR Methods, a local Perth web design business. Have you got 30 seconds?`,
+      hook: `I was looking at your website and noticed ${problem}.`,
+      offer: `We rebuild websites for local businesses: modern, fast, works perfectly on phones, and we keep everything that's working for you now. I can put together a free mockup of what yours could look like.`,
+      close: "Can I send that mockup to this number by text when it's ready? Who's the best person to put it under?",
+    };
+  }
   return {
     opener: `Hi, is this the owner of ${lead.name}? My name's ${first}, I'm with AR Methods, a local Perth web design business. Have you got 30 seconds?`,
     hook: `I noticed ${lead.name} doesn't have its own website. The reason I'm calling is ${HOOKS[g]}.`,
@@ -186,6 +201,8 @@ export function leadScore(l) {
   if (l.rating != null) s += l.rating >= 4.5 ? 10 : l.rating >= 4 ? 6 : l.rating >= 3.5 ? 2 : -5;
   s += l.websiteKind === "none" ? 20 : l.websiteKind === "social" ? 12 : 0;
   if (l.maybeSite) s -= 15;
+  if (l.referredBy) s += 25; // a client vouched for us
+  if (l.oldSite) s = Math.max(s, 40 + Math.round(l.oldSite.score / 2)); // redesign leads: how outdated the site is
   return Math.max(1, Math.min(99, s));
 }
 export const isHot = (score) => score >= 75;
@@ -271,3 +288,17 @@ export function commissionSplit(calls, paymentByLead) {
   }
   return { paid: Math.round(paid * 100) / 100, pending: Math.round(pending * 100) / 100 };
 }
+
+// =====================================================================
+// Website packages (admin can edit these in Admin → Packages)
+// =====================================================================
+export const DEFAULT_PACKAGES = [
+  { name: "Starter", price: 500, items: ["Mobile-friendly website (up to 5 pages)", "Click-to-call and contact form", "Google Maps and opening hours", "Basic Google search setup"] },
+  { name: "Pro", price: 850, items: ["Everything in Starter", "Google Business Profile setup", "1 tap-to-review card", "Photo gallery and reviews section"] },
+  { name: "Premium", price: 1200, items: ["Everything in Pro", "Online booking or enquiry system", "3 months care plan included", "Priority support"] },
+];
+
+// =====================================================================
+// Referrals: a client who sends you a business that buys earns a reward
+// =====================================================================
+export const REFERRAL_REWARD = 50;
