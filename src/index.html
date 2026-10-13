@@ -320,6 +320,21 @@
   .objections { margin: 0; display: grid; gap: 8px; }
   .objections dt { font-weight: 700; }
   .objections dd { margin: 2px 0 0; color: var(--muted); }
+  /* ---------- who's live ---------- */
+  .live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; background: #6f605a; margin-right: 6px; vertical-align: 1px; }
+  .live-dot.live { background: #3ddc84; box-shadow: 0 0 0 0 rgba(61,220,132,.6); animation: live-ping 2s infinite; }
+  .live-dot.away { background: #f4c46a; }
+  @keyframes live-ping { 0% { box-shadow: 0 0 0 0 rgba(61,220,132,.55); } 70% { box-shadow: 0 0 0 8px rgba(61,220,132,0); } 100% { box-shadow: 0 0 0 0 rgba(61,220,132,0); } }
+  .live-card h2 { margin-bottom: 4px; }
+  .live-count { color: #3ddc84; }
+  .live-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+  .live-list li { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px 8px; padding: 9px 12px; border-radius: 12px; background: rgba(0,0,0,.25); border: 1px solid var(--border); }
+  .live-list li.live { border-color: rgba(61,220,132,.35); background: rgba(61,220,132,.06); }
+  .live-list li span { color: var(--muted); font-size: 13px; text-align: right; }
+  .live-list li.live span { color: var(--text); }
+  .status-cell { white-space: nowrap; }
+  @media (max-width: 520px) { .live-list li { grid-template-columns: auto 1fr; } .live-list li span { grid-column: 2; text-align: left; } }
+  @media (prefers-reduced-motion: reduce) { .live-dot.live { animation: none; } }
   /* ---------- payment on won deals ---------- */
   .pay { margin: 12px 0; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(244,196,106,.35); background: rgba(244,196,106,.06); }
   .pay.pay-paid { border-color: rgba(95,224,160,.45); background: rgba(95,224,160,.08); }

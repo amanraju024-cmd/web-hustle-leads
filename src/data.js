@@ -334,6 +334,17 @@ export async function getCarePlans() {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+// ---------- presence (who's live) ----------
+export const sendPresence = (me, page, visible) =>
+  setDoc(doc(db, "presence", me.id), { name: me.name, page: String(page || "").slice(0, 40), visible, at: serverTimestamp() });
+export function watchPresence(cb, onErr) {
+  return onSnapshot(collection(db, "presence"), (snap) => {
+    const m = new Map();
+    snap.forEach((d) => m.set(d.id, d.data({ serverTimestamps: "estimate" })));
+    cb(m);
+  }, onErr);
+}
+
 // ---------- team chat ----------
 export const sendMessage = (me, text) =>
   addDoc(collection(db, "messages"), { uid: me.id, name: me.name, role: me.role, text: text.slice(0, 1000), at: serverTimestamp() });

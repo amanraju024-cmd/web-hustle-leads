@@ -395,3 +395,13 @@ test("only admin marks a deal as paid", async () => {
   await assertFails(updateDoc(doc(as("w1"), "leads/sam1"), { payment: "paid", paymentAt: serverTimestamp(), updatedAt: serverTimestamp() }));
   await assertSucceeds(updateDoc(doc(as("owner"), "leads/sam1"), { payment: "deposit", paymentAt: serverTimestamp(), updatedAt: serverTimestamp() }));
 });
+
+test("presence: everyone updates their own heartbeat, only admin sees who's live", async () => {
+  const beat = (uid, o = {}) => setDoc(doc(as(uid), `presence/${uid}`), { name: "Sam", page: "leads", visible: true, at: serverTimestamp(), ...o });
+  await assertSucceeds(beat("w1"));
+  await assertFails(setDoc(doc(as("w1"), "presence/w2"), { name: "Jo", page: "leads", visible: true, at: serverTimestamp() }));
+  await assertFails(beat("w1", { name: "Aman" }));
+  await assertFails(beat("off", { name: "Old" }));
+  await assertFails(getDoc(doc(as("w2"), "presence/w1")));
+  await assertSucceeds(getDoc(doc(as("owner"), "presence/w1")));
+});

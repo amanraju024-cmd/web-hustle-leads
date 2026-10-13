@@ -158,6 +158,56 @@ function startCelebrations() {
 }
 
 // =====================================================================
+// Presence: a heartbeat every minute while the app is open and on screen
+// =====================================================================
+const PAGE_LABELS = { home: "Home", find: "Finding leads", leads: "My leads", callmode: "In call mode 📞", board: "Leaderboard",
+  chat: "Team chat", reviews: "Review cards", lockin: "Can't be bothered", account: "Account" };
+let presenceTimer = null, presencePage = "home", presenceSent = 0;
+const presenceVisible = () => document.visibilityState === "visible";
+function beat(force) {
+  if (!state.me) return;
+  if (!force && Date.now() - presenceSent < 15000) return;
+  presenceSent = Date.now();
+  D.sendPresence(state.me, presencePage, presenceVisible()).catch(() => {});
+}
+function setPresencePage(name) {
+  const page = PAGE_LABELS[name] ? name : (isAdmin() ? "admin" : "home");
+  if (page === presencePage) return;
+  presencePage = page;
+  beat(true);
+}
+function onVisibility() { beat(true); }
+function startPresence() {
+  stopPresence();
+  presenceSent = 0;
+  beat(true);
+  presenceTimer = setInterval(() => { if (presenceVisible()) beat(true); }, 60000);
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("pagehide", onVisibility);
+}
+function stopPresence() {
+  if (presenceTimer) clearInterval(presenceTimer);
+  presenceTimer = null;
+  document.removeEventListener("visibilitychange", onVisibility);
+  window.removeEventListener("pagehide", onVisibility);
+}
+/** live: on screen in the last ~2.5 min · away: app open but in the background (last 30 min) · offline */
+function presenceStatus(p) {
+  const at = toDate(p?.at)?.getTime() || 0;
+  const ago = Date.now() - at;
+  if (!at) return { key: "off", label: "Never opened the app", ago };
+  if (p.visible && ago < 150000) return { key: "live", label: `Live · ${PAGE_LABELS[p.page] || (p.page === "admin" ? "Admin" : "In the app")}`, ago };
+  if (ago < 30 * 60000) return { key: "away", label: `Away · app in background ${minsAgo(ago)}`, ago };
+  return { key: "off", label: `Offline · last seen ${lastSeenText(at)}`, ago };
+}
+const minsAgo = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m} min` : `${Math.round(m / 60)} h`; };
+function lastSeenText(at) {
+  const d = new Date(at);
+  return perthDay(d) === perthDay() ? fmtTime(d) : `${prettyDay(perthDay(d))} ${fmtTime(d)}`;
+}
+const presenceDot = (st) => `<span class="live-dot ${st.key}" aria-hidden="true"></span>`;
+
+// =====================================================================
 // Team chat
 // =====================================================================
 let chatUnsub = null;
@@ -303,6 +353,7 @@ async function route() {
   let fn = routes[name] || screenHome;
   if (adminOnly.includes(name) && !isAdmin()) fn = screenHome;
   markTab(adminOnly.includes(name) ? "admin" : name);
+  setPresencePage(name);
   window.scrollTo(0, 0);
   try { await fn(arg); }
   catch (e) { console.error(e); view().innerHTML = errorBox(D.authMessage(e)); }
@@ -390,6 +441,7 @@ function startApp() {
   renderShell();
   startCelebrations();
   startChat();
+  startPresence();
   route();
 }
 
@@ -415,7 +467,7 @@ D.onAuthStateChanged(D.auth, async (user) => {
     state.user = user;
     state.me = null;
   } else state.user = user;
-  if (!user) { stopChat(); try { localStorage.removeItem(LAST_KEY); } catch {} return renderAuth(); }
+  if (!user) { stopChat(); stopPresence(); try { localStorage.removeItem(LAST_KEY); } catch {} return renderAuth(); }
   try { localStorage.setItem(LAST_KEY, user.uid); } catch {}
   const boot = readBoot(user.uid);
   if (alreadyShowing) {
@@ -774,7 +826,7 @@ function drawMyLeads() {
     <div class="list">${shown.length ? shown.map((l) => myLeadCard(l, now)).join("")
       : `<div class="empty">${leads.length ? "No leads in this group." : `No leads yet. <a href="#find">Find and claim some</a>.`}</div>`}</div>`;
   body.querySelectorAll("[data-lf]").forEach((b) => b.addEventListener("click", () => { state.leadFilter = b.dataset.lf; drawMyLeads(); }));
-  body.querySelector("[data-callmode]")?.addEventListener("click", () => { state.callMode = true; state.callDone = new Set(); window.scrollTo(0, 0); drawMyLeads(); });
+  body.querySelector("[data-callmode]")?.addEventListener("click", () => { state.callMode = true; state.callDone = new Set(); setPresencePage("callmode"); window.scrollTo(0, 0); drawMyLeads(); });
   body.querySelectorAll("article[data-id]").forEach(wireLeadCard);
 }
 
@@ -1097,6 +1149,7 @@ async function screenAdmin() {
     ${adminNav("admin")}
     <h1 class="page">Team performance</h1>
     ${new Date(`${today}T12:00:00+08:00`).getUTCDay() === 1 ? `<div class="notice info">📊 Last week's report is ready. <a href="#report">View it</a></div>` : ""}
+    <section class="card live-card"><h2>Who's on right now</h2><div id="liveNow"><div class="loading"><span class="spinner"></span></div></div></section>
     <div id="kpis"></div>
     <div id="moneyBox"></div>
     <section class="card"><h2>Workers</h2><div id="workerTable"></div></section>
@@ -1114,6 +1167,23 @@ async function screenAdmin() {
     </section>`;
 
   drawMoney(today, rid);
+  let presence = new Map();
+  const drawLive = () => {
+    const box = $("#liveNow");
+    if (!box) return;
+    const rows = users.filter((u) => u.active && u.id !== state.me.id).map((u) => ({ u, st: presenceStatus(presence.get(u.id)) }))
+      .sort((a, b) => ["live", "away", "off"].indexOf(a.st.key) - ["live", "away", "off"].indexOf(b.st.key) || a.st.ago - b.st.ago);
+    const live = rows.filter((r) => r.st.key === "live").length;
+    box.innerHTML = `<p class="muted small">${live ? `<b class="live-count">${live} live now</b>` : "Nobody's in the app right now"} · updates every minute</p>
+      <ul class="live-list">${rows.map(({ u, st }) => `<li class="${st.key}">${presenceDot(st)}<a href="#worker/${esc(u.id)}"><b>${esc(u.name)}</b></a><span>${esc(st.label)}</span></li>`).join("")}</ul>`;
+  };
+  const paintStatus = () => document.querySelectorAll("[data-status-uid]").forEach((td) => {
+    const st = presenceStatus(presence.get(td.dataset.statusUid));
+    td.innerHTML = `${presenceDot(st)}<span class="${st.key === "live" ? "" : "muted"}">${esc(st.label)}</span>`;
+  });
+  state.unsub.push(D.watchPresence((m) => { presence = m; drawLive(); paintStatus(); }, (e) => { const box = $("#liveNow"); if (box) box.innerHTML = errorBox(D.authMessage(e)); }));
+  const liveTick = setInterval(() => { if (!$("#liveNow")) return clearInterval(liveTick); drawLive(); paintStatus(); }, 30000);
+  state.unsub.push(() => clearInterval(liveTick));
   let todayEvents = [];
   let googleToday = 0;
   let monthRevenue = 0;
@@ -1134,16 +1204,15 @@ async function screenAdmin() {
       ${tile("Leads claimed", evCount(todayEvents, "claim"), "today")}
     </section>`;
     const tBoard = D.leaderboard(todayRows), wBoard = D.leaderboard(weekRows);
-    const lastSeen = new Map();
-    todayEvents.forEach((e) => { if (!lastSeen.has(e.uid)) lastSeen.set(e.uid, e.createdAt); });
     $("#workerTable").innerHTML = `<div class="tablewrap"><table class="board">
-      <thead><tr><th>Name</th><th class="n">Today calls</th><th class="n">Today pts</th><th class="n">Week calls</th><th class="n">Interested</th><th class="n">Won</th><th class="n">Week pts</th><th>Last active</th></tr></thead>
+      <thead><tr><th>Name</th><th class="n">Today calls</th><th class="n">Today pts</th><th class="n">Week calls</th><th class="n">Interested</th><th class="n">Won</th><th class="n">Week pts</th><th>Status</th></tr></thead>
       <tbody>${users.filter((u) => u.active).map((u) => {
         const t = tBoard.find((r) => r.uid === u.id) || {}; const w = wBoard.find((r) => r.uid === u.id) || {};
         return `<tr><td><a href="#worker/${esc(u.id)}">${esc(u.name)}</a>${u.role === "admin" ? ' <em class="role">Admin</em>' : ""}</td>
           <td class="n">${t.calls || 0}</td><td class="n">${t.points || 0}</td><td class="n">${w.calls || 0}</td><td class="n">${w.interested || 0}</td>
-          <td class="n">${w.won || 0}</td><td class="n"><b>${w.points || 0}</b></td><td>${lastSeen.has(u.id) ? esc(fmtTime(lastSeen.get(u.id))) : '<span class="muted">Not today</span>'}</td></tr>`;
+          <td class="n">${w.won || 0}</td><td class="n"><b>${w.points || 0}</b></td><td class="status-cell" data-status-uid="${esc(u.id)}"></td></tr>`;
       }).join("")}</tbody></table></div>`;
+    paintStatus();
   };
   const drawFeed = () => {
     if (!$("#feed")) return;

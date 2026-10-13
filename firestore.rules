@@ -268,6 +268,16 @@ service cloud.firestore {
         && validPlan(request.resource.data);
       allow delete: if isAdmin();
     }
+    // Who's online: each person updates only their own heartbeat; only admin sees everyone's
+    match /presence/{uid} {
+      allow read: if isAdmin();
+      allow write: if isActive() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['name', 'page', 'visible', 'at'])
+        && request.resource.data.name == profile().name
+        && shortString(request.resource.data.page, 40)
+        && request.resource.data.visible is bool
+        && request.resource.data.at == request.time;
+    }
     // Team chat: everyone active reads and posts as themselves (name/role must match their profile); admin can delete
     match /messages/{id} {
       allow read: if isActive();
