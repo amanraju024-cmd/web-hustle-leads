@@ -86,15 +86,15 @@ export function creditHtml(brand = {}) {
 
 // NFC review cards: tap a phone on the card and the business's Google review page opens
 export const NFC = {
-  price: "$49 for 2 cards",
-  pitch: "One more thing: most of our clients grab a couple of tap-to-review cards for the counter. Your customer taps their phone on the card and your Google review page pops up, so getting reviews takes them five seconds. It's $49 for two. Want me to add them?",
-  bundle: "If it helps, I can do the website plus two tap-to-review cards for $549. The cards get you Google reviews from day one.",
+  price: "$50 per card",
+  pitch: "One more thing: most of our clients grab a couple of tap-to-review cards for the counter. Your customer taps their phone on the card and your Google review page pops up, so getting reviews takes them five seconds. They're $50 each. Want me to add one or two?",
+  bundle: "If it helps, I can do the website plus a tap-to-review card for $550. The card gets you Google reviews from day one.",
   objection: ["“Do people actually use them?”", "Asking for a review is awkward, so most businesses never do it. With the card on the counter you just say “tap here if you were happy” and it opens straight to the review page. More reviews means you show up higher on Google."],
-  text: (name, me, brand) => `Hi, quick one: we've started doing tap-to-review cards for ${name}. Customers tap their phone on the card at the counter and it opens your Google review page, so you get way more reviews. $49 for two, and I'll set them up for you. Keen?\n${signature(me, brand)}`,
+  text: (name, me, brand) => `Hi, quick one: we've started doing tap-to-review cards for ${name}. Customers tap their phone on the card at the counter and it opens your Google review page, so you get way more reviews. They're $50 each and I'll set it up for you. Keen?\n${signature(me, brand)}`,
 };
 
 export const AFTER_WON = {
-  upsell: "Most of our clients add our care plan — we host it, keep it updated and fix anything for a small monthly fee, so you never have to think about it. Want me to add that on?",
+  upsell: "Most of our clients add our care plan — we host it, keep it updated and fix anything, so you never have to think about it. Packages start from just $10 a month, up to $45 depending on what you need. Want me to add that on?",
   referral: "Really glad we're working together. Do you know any other business owners who don't have a website yet? I'll look after them the same way.",
   review: "Once it's live, would you mind leaving us a quick Google review? It really helps a small business like ours.",
 };
@@ -215,7 +215,9 @@ export const hourLabel = (h) => `${((h + 11) % 12) + 1}${h < 12 ? "am" : "pm"}`;
 // =====================================================================
 // Care plans: monthly recurring income
 // =====================================================================
-export const CARE_DEFAULT = 49; // $/month suggested on the after-sale screen
+// Care plans are packages from $10 to $45 a month
+export const CARE_PRESETS = [10, 20, 30, 45];
+export const CARE_DEFAULT = 10;
 
 /** Number of billing dates from startDay up to and including today (billed on the start date each month). */
 export function monthsBilled(startDay, endDay) {

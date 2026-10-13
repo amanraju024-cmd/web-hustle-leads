@@ -16,6 +16,11 @@ export const OWNER_EMAIL = "amanraju024@gmail.com";
 // limit instead of charging. Used for business search via Places API (New).
 export const GOOGLE_MAPS_KEY = "AIzaSyCYF9M16-yz9SgllqWeC51CTgdsNsGxnGU";
 
+// AR Methods contact details shown in client texts and the "Website by AR Methods" credit.
+// Admin → Brand kit can override these.
+export const BRAND_LINK = "https://www.instagram.com/ar.methods_/";
+export const BRAND_PHONE = "0493 523 482";
+
 // Optional TomTom Search API key (free tier, no card) for extra business coverage.
 // Leave empty to search OpenStreetMap only.
 export const TOMTOM_KEY = "";

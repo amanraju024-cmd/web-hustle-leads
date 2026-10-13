@@ -1,10 +1,10 @@
 // AR Methods Leads — app shell, routing and screens.
 import * as D from "./data.js";
 import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE, findPlaceForReview, reviewLink } from "./search.js";
-import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY } from "./config.js";
+import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
+  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -501,7 +501,7 @@ D.onAuthStateChanged(D.auth, async (user) => {
         : renderBlocked("Account turned off", "Your account has been deactivated. Contact Aman if you think this is a mistake.");
     }
     const goal = team?.dailyGoal || 30;
-    const brand = { brandLink: team?.brandLink || "", brandPhone: team?.brandPhone || "" };
+    const brand = { brandLink: team?.brandLink ?? BRAND_LINK, brandPhone: team?.brandPhone ?? BRAND_PHONE };
     state.brand = brand;
     const changed = !boot?.me || boot.me.role !== me.role || boot.me.name !== me.name || boot.goal !== goal || boot.googleToken !== googleToken;
     saveBoot(user.uid, { me, goal, googleToken, brand });
@@ -982,19 +982,20 @@ function showAfterWon(lead, value) {
       <p class="muted">You'll earn <b>${money(commissionFor(value))}</b> once they pay in full. Before you hang up, squeeze more out of it:</p></div>
     <div class="after-won">
       <div><b>1. Care plan (monthly money)</b><p>${esc(AFTER_WON.upsell)}</p>
-        <form class="care-quick" id="careQuick"><span class="cur">$</span><input type="number" id="careAmt" min="1" max="10000" step="1" value="${CARE_DEFAULT}" aria-label="Monthly amount"><span class="muted small">/month</span>
-          <button class="primary small">They said yes: add care plan</button></form></div>
+        <form class="care-quick" id="careQuick">${carePresets("careAmt")}<span class="cur">$</span><input type="number" id="careAmt" min="1" max="10000" step="1" value="${CARE_DEFAULT}" aria-label="Monthly amount"><span class="muted small">/month</span>
+          <button type="submit" class="primary small">They said yes: add care plan</button></form></div>
       <div class="upsell-step"><b>2. Tap-to-review cards (${esc(NFC.price)})</b><p>${esc(NFC.pitch)}</p>
         ${isAdmin() ? `<a class="ghost small" href="#reviews/${encodeURIComponent([lead.name, lead.suburb].filter(Boolean).join(" "))}" data-close>Make their review card link →</a>` : ""}</div>
       <div><b>3. Referral (free leads)</b><p>${esc(AFTER_WON.referral)}</p></div>
       <div><b>4. Review (more trust)</b><p>${esc(AFTER_WON.review)}</p></div>
     </div>`);
+  wireCarePresets(document);
   const form = $("#careQuick");
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const monthly = Number($("#careAmt").value);
     if (!(monthly > 0)) return toast("Enter the monthly amount", "bad");
-    await busy(e.submitter || form.querySelector("button"), "Saving", async () => {
+    await busy(e.submitter || form.querySelector("button[type=submit]"), "Saving", async () => {
       try {
         await D.addCarePlan(state.me, { client: lead.name, leadId: lead.id, monthly, startDay: perthDay() });
         form.outerHTML = `<p class="care-done">✓ Care plan added: ${esc(money(monthly))}/month. That's ${esc(money(monthly * 12))} a year.</p>`;
@@ -1568,6 +1569,20 @@ function roastFor(calls, goal, name) {
 // =====================================================================
 // Care plans (admin): monthly recurring income
 // =====================================================================
+// Package quick-picks ($10–$45 a month); the number box still takes any amount
+const carePresets = (inputId) => `<span class="care-presets">${CARE_PRESETS.map((v) => `<button type="button" class="chip ${v === CARE_DEFAULT ? "on" : ""}" data-preset="${v}" data-for="${inputId}">$${v}</button>`).join("")}</span>`;
+function wireCarePresets(root) {
+  root.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => {
+    const input = document.getElementById(b.dataset.for);
+    if (!input) return;
+    input.value = b.dataset.preset;
+    b.parentElement.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c === b));
+  }));
+  root.querySelectorAll(".care-presets + .cur + input, .care-presets + input").forEach((input) => input.addEventListener("input", () => {
+    input.parentElement.querySelectorAll(`[data-for="${input.id}"]`).forEach((c) => c.classList.toggle("on", c.dataset.preset === input.value));
+  }));
+}
+
 async function screenCare() {
   setTitle("Care plans");
   const rid = state.routeId;
@@ -1601,10 +1616,10 @@ async function screenCare() {
       <div class="care-grid">
         <div><label for="cpClient">Client</label><input id="cpClient" list="cpWon" maxlength="120" required placeholder="Business name">
           <datalist id="cpWon">${won.map((l) => `<option value="${esc(l.name)}">`).join("")}</datalist></div>
-        <div><label for="cpAmt">Per month ($)</label><input id="cpAmt" type="number" min="1" max="10000" step="1" value="${CARE_DEFAULT}" required></div>
+        <div><label for="cpAmt">Per month ($)</label>${carePresets("cpAmt")}<input id="cpAmt" type="number" min="1" max="10000" step="1" value="${CARE_DEFAULT}" required></div>
         <div><label for="cpStart">Started</label><input id="cpStart" type="date" value="${today}" required></div>
       </div>
-      <button class="primary">Add care plan</button>
+      <button type="submit" class="primary">Add care plan</button>
     </form>
     <section class="card">
       <h2>All care plans</h2>
@@ -1619,6 +1634,7 @@ async function screenCare() {
               <button class="linkbtn danger" data-delp="${esc(p.id)}">Delete</button></td></tr>`;
         }).join("")}</tbody></table></div>` : `<div class="empty">No care plans yet. Offer one on every sale. ${esc(money(CARE_DEFAULT))}/month from 20 clients is ${esc(money(CARE_DEFAULT * 20 * 12))} a year.</div>`}
     </section>`;
+  wireCarePresets($("#careBody"));
   $("#careBody").querySelectorAll("[data-rem]").forEach((b) => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(reminder(st.dueSoon[Number(b.dataset.rem)])); toast("Reminder copied"); } catch { toast("Couldn't copy", "bad"); }
   }));
@@ -1629,7 +1645,7 @@ async function screenCare() {
     const startDay = $("#cpStart").value;
     if (!client || !(monthly > 0) || !startDay) return toast("Fill in the client, amount and start date", "bad");
     const lead = won.find((l) => l.name === client);
-    await busy(e.submitter || $("#careForm button"), "Saving", async () => {
+    await busy(e.submitter || $("#careForm button[type=submit]"), "Saving", async () => {
       try { await D.addCarePlan(state.me, { client, leadId: lead?.id || "", monthly, startDay }); toast(`Care plan added: ${money(monthly)}/month`); screenCare(); }
       catch (err) { toast(D.authMessage(err), "bad"); }
     });

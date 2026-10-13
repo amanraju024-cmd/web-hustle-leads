@@ -8,7 +8,7 @@ import {
   initializeFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection,
   query, where, orderBy, limit, onSnapshot, runTransaction, writeBatch, serverTimestamp, documentId, Timestamp,
 } from "firebase/firestore";
-import { firebaseConfig } from "./config.js";
+import { firebaseConfig, BRAND_LINK, BRAND_PHONE } from "./config.js";
 import { perthDay, weekStart, chunk } from "./util.js";
 
 const useEmulator = ["localhost", "127.0.0.1"].includes(location.hostname);
@@ -84,7 +84,7 @@ export const updateUser = (uid, fields) => updateDoc(doc(db, "users", uid), { ..
 export async function getTeamSettings() {
   const snap = await getDoc(doc(db, "settings", "team"));
   const d = snap.exists() ? snap.data() : {};
-  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10, brandLink: d.brandLink || "", brandPhone: d.brandPhone || "" };
+  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10, brandLink: d.brandLink ?? BRAND_LINK, brandPhone: d.brandPhone ?? BRAND_PHONE };
 }
 /** Brand details clients see (link + phone in texts and the website credit). Keeps the daily goal as is. */
 export async function saveBrand({ brandLink, brandPhone }) {
