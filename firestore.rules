@@ -25,6 +25,18 @@ service cloud.firestore {
     }
     function shortString(v, max) { return v is string && v.size() <= max; }
 
+    // Dates come from the server clock (Perth = UTC+8, no daylight saving), never the phone
+    function pad2(n) { return (n < 10 ? '0' : '') + string(n); }
+    function dayOf(t) { return string(t.year()) + '-' + pad2(t.month()) + '-' + pad2(t.day()); }
+    function perthNow() { return request.time + duration.value(8, 'h'); }
+    function perthToday() { return dayOf(perthNow()); }
+    function perthWeek() { return dayOf(perthNow() - duration.value(perthNow().dayOfWeek() - 1, 'd')); }
+    function callPath(id) { return /databases/$(database)/documents/calls/$(id); }
+    function leadPath(id) { return /databases/$(database)/documents/leads/$(id); }
+    // What a lead has already earned (older leads without the flags count by their current status)
+    function hadInterested(l) { return l.get('gotInterested', l.status == 'Interested' || l.status == 'Won'); }
+    function hadWon(l) { return l.get('gotWon', l.status == 'Won'); }
+
     // ---------- users ----------
     match /users/{uid} {
       allow read: if isAdmin() || isMe(uid);
@@ -114,31 +126,55 @@ service cloud.firestore {
         && request.resource.data.assignedTo == request.auth.uid
         && claimedByMeInThisWrite();
 
-      // Worker works their own lead: status, notes, call-back only
+      // Worker works their own lead: notes/call-back on their own, or a status change that comes
+      // with a brand-new call record in the same write (so every status change is a logged call)
+      function callLogged() {
+        let n = request.resource.data;
+        let o = resource.data;
+        let c = getAfter(callPath(n.lastCallId)).data;
+        return onlyChanged(['status', 'notes', 'callbackAt', 'lastCalledAt', 'updatedAt', 'lastCallId', 'countedDay', 'gotInterested', 'gotWon'])
+          && n.lastCallId is string
+          && !exists(callPath(n.lastCallId))
+          && existsAfter(callPath(n.lastCallId))
+          && c.leadId == leadId && c.uid == request.auth.uid && c.status == n.status
+          && n.status in callStatuses()
+          && n.countedDay == c.day
+          && n.gotInterested == (hadInterested(o) || n.status == 'Interested')
+          && n.gotWon == (hadWon(o) || n.status == 'Won')
+          && n.lastCalledAt == request.time;
+      }
       allow update: if isActive()
         && resource.data.assignedTo == request.auth.uid
         && request.resource.data.assignedTo == request.auth.uid
-        && onlyChanged(['status', 'notes', 'callbackAt', 'lastCalledAt', 'updatedAt'])
-        && request.resource.data.status in statuses()
-        && shortString(request.resource.data.notes, 2000);
+        && shortString(request.resource.data.notes, 2000)
+        && (onlyChanged(['notes', 'callbackAt', 'updatedAt']) || callLogged());
     }
 
     // ---------- call log (source of all stats) ----------
+    // Fair points: a lead counts as one call per day; the Interested (+3) and Won (+10, deal value)
+    // bonuses can each be earned once per lead, ever. The lead must be updated in the same write.
     match /calls/{callId} {
+      function callOk() {
+        let c = request.resource.data;
+        let lead = get(leadPath(c.leadId)).data;
+        return c.uid == request.auth.uid
+          && c.status in callStatuses()
+          && c.day == perthToday()
+          && c.week == perthWeek()
+          && c.createdAt == request.time
+          && lead.assignedTo == request.auth.uid
+          && getAfter(leadPath(c.leadId)).data.lastCallId == callId
+          && c.counted == (lead.get('countedDay', '') != c.day ? 1 : 0)
+          && c.bonusI == (c.status == 'Interested' && !hadInterested(lead) ? 1 : 0)
+          && c.bonusW == (c.status == 'Won' && !hadWon(lead) ? 1 : 0)
+          && c.points == c.counted + 3 * c.bonusI + 10 * c.bonusW
+          && shortString(c.notes, 2000)
+          && (c.bonusW == 1
+              ? (c.value is number && c.value >= 0 && c.value <= 100000)
+              : (!('value' in c) || c.value == 0));
+      }
       allow read: if isAdmin() || (isActive() && resource.data.uid == request.auth.uid);
-      allow create: if isActive()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status in callStatuses()
-        && request.resource.data.points == 1
-            + (request.resource.data.status == 'Interested' ? 3 : 0)
-            + (request.resource.data.status == 'Won' ? 10 : 0)
-        && shortString(request.resource.data.notes, 2000)
-        && request.resource.data.day is string
-        && request.resource.data.week is string
-        && (request.resource.data.status == 'Won'
-            ? (request.resource.data.value is number && request.resource.data.value >= 0 && request.resource.data.value <= 100000)
-            : !('value' in request.resource.data) || request.resource.data.value == 0)
-        && get(/databases/$(database)/documents/leads/$(request.resource.data.leadId)).data.assignedTo == request.auth.uid;
+      allow create: if isActive() && callOk();
       allow update: if false;
       allow delete: if isAdmin();
     }
@@ -155,28 +191,30 @@ service cloud.firestore {
           && newCall().uid == request.auth.uid
           && newCall().day == d().day;
       }
-      function addsI() { return newCall().status == 'Interested' ? 1 : 0; }
-      function addsW() { return newCall().status == 'Won' ? 1 : 0; }
-      function addsV() { return newCall().status == 'Won' ? newCall().value : 0; }
+      function addsC() { return newCall().counted; }
+      function addsI() { return newCall().bonusI; }
+      function addsW() { return newCall().bonusW; }
+      function addsV() { return newCall().bonusW == 1 ? newCall().value : 0; }
       function pointsOk() { return d().points == d().calls + 3 * d().interested + 10 * d().won; }
 
       allow read: if isActive();
       allow create: if isActive()
         && statId == d().day + '_' + request.auth.uid
         && d().uid == request.auth.uid
-        && shortString(d().name, 80)
-        && d().week is string
+        && d().name == profile().name
+        && d().week == newCall().week
         && callIsNewAndMine()
-        && d().calls == 1 && d().interested == addsI() && d().won == addsW()
+        && d().calls == addsC() && d().interested == addsI() && d().won == addsW()
         && d().get('revenue', 0) == addsV()
         && pointsOk();
       allow update: if isActive()
         && resource.data.uid == request.auth.uid
         && d().uid == resource.data.uid
+        && d().name == profile().name
         && d().day == resource.data.day
         && d().week == resource.data.week
         && callIsNewAndMine()
-        && d().calls == resource.data.calls + 1
+        && d().calls == resource.data.calls + addsC()
         && d().interested == resource.data.interested + addsI()
         && d().won == resource.data.won + addsW()
         && d().get('revenue', 0) == resource.data.get('revenue', 0) + addsV()

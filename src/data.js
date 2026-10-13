@@ -222,38 +222,60 @@ export const saveNotes = (leadId, notes, callbackAt) =>
 /**
  * Logs a call: updates the lead, writes the call record and bumps today's stats, all in one transaction.
  */
+// What a lead has already earned (older leads without the flags count by their current status)
+export const hadInterested = (l) => l.gotInterested ?? (l.status === "Interested" || l.status === "Won");
+export const hadWon = (l) => l.gotWon ?? l.status === "Won";
+
+/**
+ * Logs a call. Fair points (enforced by firestore.rules too):
+ *  - a lead counts as 1 call / 1 point once per day; more calls the same day are saved but add nothing
+ *  - Interested (+3) and Won (+10 and the deal value) can each be earned once per lead, ever
+ * Returns what this call earned: { counted, bonusI, bonusW, points }.
+ */
 export async function logCall(me, lead, status, notes, callbackAt, dealValue = 0) {
   const day = perthDay();
   const week = weekStart(day);
+  const leadRef = doc(db, "leads", lead.id);
   const callRef = doc(collection(db, "calls"));
   const statRef = doc(db, "stats", `${day}_${me.id}`);
-  const points = pointsFor(status);
+  let earned = null;
   await runTransaction(db, async (tx) => {
-    const stat = await tx.get(statRef);
+    const [leadSnap, stat] = [await tx.get(leadRef), await tx.get(statRef)];
+    const cur = leadSnap.data();
+    const counted = cur.countedDay !== day ? 1 : 0;
+    const bonusI = status === "Interested" && !hadInterested(cur) ? 1 : 0;
+    const bonusW = status === "Won" && !hadWon(cur) ? 1 : 0;
+    const points = counted + 3 * bonusI + 10 * bonusW;
+    const value = bonusW ? Math.max(0, Math.min(100000, Math.round(Number(dealValue) || 0))) : 0;
     const prev = stat.exists() ? stat.data() : { calls: 0, interested: 0, won: 0, revenue: 0 };
-    const value = status === "Won" ? Math.max(0, Math.min(100000, Math.round(Number(dealValue) || 0))) : 0;
-    const calls = prev.calls + 1;
-    const interested = prev.interested + (status === "Interested" ? 1 : 0);
-    const won = prev.won + (status === "Won" ? 1 : 0);
-    tx.update(doc(db, "leads", lead.id), {
+    const calls = prev.calls + counted;
+    const interested = prev.interested + bonusI;
+    const won = prev.won + bonusW;
+    tx.update(leadRef, {
       status, notes, callbackAt: status === "Call back" ? (callbackAt ?? null) : null,
       lastCalledAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      lastCallId: callRef.id, countedDay: day,
+      gotInterested: hadInterested(cur) || status === "Interested",
+      gotWon: hadWon(cur) || status === "Won",
     });
     tx.set(callRef, {
-      leadId: lead.id, leadName: lead.name, uid: me.id, userName: me.name, status, notes, points,
-      day, week, createdAt: serverTimestamp(), ...(status === "Won" ? { value } : {}),
+      leadId: lead.id, leadName: lead.name, uid: me.id, userName: me.name, status, notes,
+      counted, bonusI, bonusW, points, day, week, createdAt: serverTimestamp(), ...(bonusW ? { value } : {}),
     });
     tx.set(statRef, {
       uid: me.id, name: me.name, day, week, calls, interested, won,
       points: calls + 3 * interested + 10 * won, lastCallId: callRef.id,
       revenue: (prev.revenue || 0) + value,
     });
+    earned = { counted, bonusI, bonusW, points, value };
   });
   const note = notes.trim() ? `: “${notes.trim().slice(0, 120)}”` : "";
-  const money = status === "Won" && dealValue ? ` ($${Math.round(dealValue).toLocaleString("en-AU")})` : "";
-  logEvent(me, "call", `marked ${lead.name} as ${status}${money}${note}`, { leadId: lead.id, status });
-  if (status === "Won") celebrate(me, "won", `${me.name} just closed ${lead.name}${money} 💰`);
-  else if (status === "Interested") celebrate(me, "interested", `${me.name} got ${lead.name} interested 🔥`);
+  const money = earned.bonusW && earned.value ? ` ($${earned.value.toLocaleString("en-AU")})` : "";
+  const flag = earned.points ? "" : " (already counted today, no points)";
+  logEvent(me, "call", `marked ${lead.name} as ${status}${money}${note}${flag}`, { leadId: lead.id, status });
+  if (earned.bonusW) celebrate(me, "won", `${me.name} just closed ${lead.name}${money} 💰`);
+  else if (earned.bonusI) celebrate(me, "interested", `${me.name} got ${lead.name} interested 🔥`);
+  return earned;
 }
 
 // ---------- stats ----------

@@ -1,6 +1,7 @@
 // Security rule tests. Run with: npm run test:rules (starts the Firestore + Auth emulators)
 import { test, before, after, beforeEach } from "node:test";
 import { readFileSync } from "node:fs";
+import { perthDay, weekStart } from "../src/util.js";
 import {
   initializeTestEnvironment, assertFails, assertSucceeds,
 } from "@firebase/rules-unit-testing";
@@ -147,9 +148,10 @@ test("workers only see their own leads; everyone sees claims", async () => {
   await assertSucceeds(getDocs(collection(as("owner"), "leads")));
 });
 
-test("worker edits only status/notes/callback on their lead", async () => {
+test("worker edits only notes/callback on their lead (status changes need a logged call)", async () => {
   const db = as("w1");
-  await assertSucceeds(updateDoc(doc(db, "leads/sam1"), { notes: "call after 2", status: "Call back" }));
+  await assertSucceeds(updateDoc(doc(db, "leads/sam1"), { notes: "call after 2" }));
+  await assertFails(updateDoc(doc(db, "leads/sam1"), { notes: "call after 2", status: "Call back" }));
   await assertFails(updateDoc(doc(db, "leads/sam1"), { phone: "000" }));
   await assertFails(updateDoc(doc(db, "leads/sam1"), { status: "Paid" }));
 });
@@ -167,45 +169,101 @@ test("admin can assign, reassign and unassign", async () => {
 });
 
 // ---------- calls and stats ----------
+const TODAY = perthDay();
+const WEEK = weekStart(TODAY);
+// Mirrors data.js logCall: lead + call + stats in one write. `lead` is the lead's state before the call.
 function logCall(db, { uid = "w1", name = "Sam", leadId = "sam1", status = "No answer", callId = "c1",
-  day = "2026-10-12", week = "2026-10-12", prev = null, points, statOverride = {}, value, callOverride = {} } = {}) {
-  const v = status === "Won" ? (value ?? 500) : 0;
-  const p = points ?? 1 + (status === "Interested" ? 3 : 0) + (status === "Won" ? 10 : 0);
+  day = TODAY, week = WEEK, prev = null, lead: before = {}, value, callOverride = {}, statOverride = {}, leadOverride = {} } = {}) {
+  const hadI = before.gotInterested ?? (before.status === "Interested" || before.status === "Won");
+  const hadW = before.gotWon ?? before.status === "Won";
+  const counted = before.countedDay !== day ? 1 : 0;
+  const bonusI = status === "Interested" && !hadI ? 1 : 0;
+  const bonusW = status === "Won" && !hadW ? 1 : 0;
+  const v = bonusW ? (value ?? 500) : 0;
   const b = writeBatch(db);
-  b.update(doc(db, `leads/${leadId}`), { status, notes: "n", lastCalledAt: serverTimestamp(), updatedAt: serverTimestamp() });
-  b.set(doc(db, `calls/${callId}`), { leadId, leadName: "Sam Barber", uid, userName: name, status, notes: "n", points: p, day, week, createdAt: serverTimestamp(), ...(status === "Won" ? { value: v } : {}), ...callOverride });
+  b.update(doc(db, `leads/${leadId}`), { status, notes: "n", callbackAt: null, lastCalledAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    lastCallId: callId, countedDay: day, gotInterested: hadI || status === "Interested", gotWon: hadW || status === "Won", ...leadOverride });
+  b.set(doc(db, `calls/${callId}`), { leadId, leadName: "Sam Barber", uid, userName: name, status, notes: "n",
+    counted, bonusI, bonusW, points: counted + 3 * bonusI + 10 * bonusW, day, week, createdAt: serverTimestamp(), ...(bonusW ? { value: v } : {}), ...callOverride });
   const base = prev || { calls: 0, interested: 0, won: 0, revenue: 0 };
-  const calls = base.calls + 1;
-  const interested = base.interested + (status === "Interested" ? 1 : 0);
-  const won = base.won + (status === "Won" ? 1 : 0);
-  b.set(doc(db, `stats/${day}_${uid}`), {
-    uid, name, day, week, calls, interested, won, points: calls + 3 * interested + 10 * won, lastCallId: callId,
-    revenue: (base.revenue || 0) + v, ...statOverride,
-  });
+  const calls = base.calls + counted, interested = base.interested + bonusI, won = base.won + bonusW;
+  b.set(doc(db, `stats/${day}_${uid}`), { uid, name, day, week, calls, interested, won, points: calls + 3 * interested + 10 * won,
+    lastCallId: callId, revenue: (base.revenue || 0) + v, ...statOverride });
   return b.commit();
 }
+const statNow = async (db, uid = "w1") => (await getDoc(doc(db, `stats/${TODAY}_${uid}`))).data();
 
 test("worker logs calls and their stats update", async () => {
   const db = as("w1");
+  await assertSucceeds(logCall(db, { status: "Interested", callId: "c1" }));
+  const s = await statNow(db);
+  assert1(s.calls === 1 && s.interested === 1 && s.points === 4, "1 call + Interested = 4 points");
+});
+
+test("fair points: a lead counts once a day; Interested and Won bonuses once per lead", async () => {
+  const db = as("w1");
   await assertSucceeds(logCall(db, { status: "No answer", callId: "c1" }));
-  await assertSucceeds(logCall(db, { status: "Interested", callId: "c2", prev: { calls: 1, interested: 0, won: 0 } }));
-  await assertSucceeds(logCall(db, { status: "Won", callId: "c3", prev: { calls: 2, interested: 1, won: 0 } }));
-  const s = await getDoc(doc(db, "stats/2026-10-12_w1"));
-  assert1(s.data().points === 3 + 3 + 10, "points = calls + 3*interested + 10*won");
+  // same lead again today: saved, but no call or point
+  await assertSucceeds(logCall(db, { status: "No answer", callId: "c2", lead: { status: "No answer", countedDay: TODAY }, prev: { calls: 1, interested: 0, won: 0 } }));
+  // Interested later today: +3 once
+  await assertSucceeds(logCall(db, { status: "Interested", callId: "c3", lead: { status: "No answer", countedDay: TODAY }, prev: { calls: 1, interested: 0, won: 0 } }));
+  await assertSucceeds(logCall(db, { status: "Interested", callId: "c4", lead: { status: "Interested", countedDay: TODAY, gotInterested: true }, prev: { calls: 1, interested: 1, won: 0 } }));
+  let s = await statNow(db);
+  assert1(s.calls === 1 && s.interested === 1 && s.points === 4, `repeat taps don't add (got ${JSON.stringify(s)})`);
+  await assertSucceeds(logCall(db, { status: "Won", callId: "c5", value: 800, lead: { status: "Interested", countedDay: TODAY, gotInterested: true }, prev: { calls: 1, interested: 1, won: 0, revenue: 0 } }));
+  await assertSucceeds(logCall(db, { status: "Won", callId: "c6", value: 800, lead: { status: "Won", countedDay: TODAY, gotInterested: true, gotWon: true }, prev: { calls: 1, interested: 1, won: 1, revenue: 800 } }));
+  s = await statNow(db);
+  assert1(s.won === 1 && s.revenue === 800 && s.points === 14, `Won counts once (got ${JSON.stringify(s)})`);
+});
+
+test("can't claim points the lead already earned", async () => {
+  const db = as("w1");
+  await assertSucceeds(logCall(db, { status: "Won", callId: "c1", value: 500 }));
+  const won = { status: "Won", countedDay: TODAY, gotInterested: false, gotWon: true };
+  const prev = { calls: 1, interested: 0, won: 1, revenue: 500 };
+  // pretend the lead was never won / never called today
+  await assertFails(logCall(db, { status: "Won", callId: "c2", value: 500, lead: { ...won, gotWon: false }, prev }));
+  await assertFails(logCall(db, { status: "No answer", callId: "c3", lead: { ...won, countedDay: "" }, prev }));
+  // reset the lead's flags while logging
+  await assertFails(logCall(db, { status: "Not interested", callId: "c4", lead: won, prev, leadOverride: { gotWon: false } }));
+});
+
+test("leads that were Interested before this update don't earn the bonus again", async () => {
+  await updateDoc(doc(as("owner"), "leads/sam1"), { status: "Interested" }); // old lead: no flags yet
+  const db = as("w1");
+  await assertFails(logCall(db, { status: "Interested", callId: "c1", lead: { status: "New" } }));      // pretends it's fresh
+  await assertSucceeds(logCall(db, { status: "Interested", callId: "c2", lead: { status: "Interested" } })); // counts the call only
+  const s = await statNow(db);
+  assert1(s.calls === 1 && s.interested === 0 && s.points === 1, "call counted, no repeat bonus");
+});
+
+test("can't backdate or forward-date calls", async () => {
+  const db = as("w1");
+  await assertFails(logCall(db, { day: "2026-01-05", week: "2026-01-05" }));
+  await assertFails(logCall(db, { week: "2026-01-05" }));
+});
+
+test("status only changes together with a logged call; notes alone are fine", async () => {
+  const db = as("w1");
+  await assertFails(updateDoc(doc(db, "leads/sam1"), { status: "Won", updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db, "leads/sam1"), { gotWon: false }));
+  await assertSucceeds(updateDoc(doc(db, "leads/sam1"), { notes: "spoke to Dave", updatedAt: serverTimestamp() }));
 });
 
 test("can't inflate stats", async () => {
   const db = as("w1");
   await assertFails(logCall(db, { statOverride: { calls: 5, points: 5 } }));
   await assertFails(logCall(db, { status: "No answer", statOverride: { won: 1, points: 11 } }));
-  await assertFails(logCall(db, { status: "Won", points: 50 }));
+  await assertFails(logCall(db, { status: "Won", callOverride: { points: 50 } }));
+  await assertFails(logCall(db, { status: "No answer", callOverride: { counted: 0, points: 0 }, statOverride: { calls: 1, points: 1 } }));
+  await assertFails(logCall(db, { statOverride: { name: "Aman Raju" } }));
 });
 
 test("can't reuse an old call to bump stats again", async () => {
   const db = as("w1");
   await assertSucceeds(logCall(db, { callId: "c1" }));
   const b = writeBatch(db);
-  b.set(doc(db, "stats/2026-10-12_w1"), { uid: "w1", name: "Sam", day: "2026-10-12", week: "2026-10-12", calls: 2, interested: 0, won: 0, points: 2, lastCallId: "c1" });
+  b.set(doc(db, `stats/${TODAY}_w1`), { uid: "w1", name: "Sam", day: TODAY, week: WEEK, calls: 2, interested: 0, won: 0, points: 2, lastCallId: "c1" });
   await assertFails(b.commit());
 });
 
@@ -252,9 +310,8 @@ test("search cache: active users read/write their own entries only", async () =>
 test("Won calls carry a deal value that adds to revenue", async () => {
   const db = as("w1");
   await assertSucceeds(logCall(db, { status: "Won", callId: "c1", value: 750 }));
-  await assertSucceeds(logCall(db, { status: "Won", callId: "c2", value: 500, prev: { calls: 1, interested: 0, won: 1, revenue: 750 } }));
-  const s = await getDoc(doc(db, "stats/2026-10-12_w1"));
-  assert1(s.data().revenue === 1250, "revenue sums deal values");
+  const s = await statNow(db);
+  assert1(s.revenue === 750, "revenue = deal value");
 });
 
 test("can't fake revenue", async () => {

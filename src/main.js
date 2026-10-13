@@ -561,7 +561,7 @@ async function screenHome() {
         <a class="primary" href="#find">Find new leads</a>
         <a class="ghost" href="#leads">My leads (${fresh} new)</a>
       </section>
-      <p class="muted small">Points: each call 1 · Interested +3 · Won +10</p>`;
+      <p class="muted small">Points: each lead you call 1 (once a day) · Interested +3 · Won +10 (once per lead)</p>`;
     $("#homeBody").querySelectorAll("[data-fu]").forEach((b) => b.addEventListener("click", () => showTexts(followUps[Number(b.dataset.fu)])));
   };
   state.unsub.push(D.watchStats("day", today, draw, (e) => { $("#homeBody").innerHTML = errorBox(D.authMessage(e)); }));
@@ -874,6 +874,7 @@ function wireLeadCard(card) {
       toast("Pick a call-back time, then tap Call back again.");
       return;
     }
+    if (status === "Won" && D.hadWon(lead)) return toast("This deal is already counted as won. Ask Aman if the amount needs fixing.", "bad");
     if (status === "Won" && dealBox.classList.contains("hidden")) {
       dealBox.classList.remove("hidden");
       dealInput.focus();
@@ -885,12 +886,13 @@ function wireLeadCard(card) {
     await busy(btn, "Saving", async () => {
       try {
         const value = status === "Won" ? Number(dealInput.value) : 0;
-        await D.logCall(state.me, lead, status, notes.value, status === "Call back" ? fromLocalInput(cbInput.value) : null, value);
+        const got = await D.logCall(state.me, lead, status, notes.value, status === "Call back" ? fromLocalInput(cbInput.value) : null, value);
         if (state.callMode) state.callDone?.add(lead.id);
         document.activeElement?.blur();
-        toast(status === "Won" ? `WON ${money(value)}. You earned ${money(commissionFor(value))}.` : `Logged: ${status} (+${D.pointsFor(status)} pt${D.pointsFor(status) === 1 ? "" : "s"})`);
-        if (status === "Won" || status === "Interested") confetti();
-        if (status === "Won") showAfterWon(lead, value);
+        const why = !got.points ? (status === "Interested" ? " (already counted: Interested points only count once per lead)" : " (already counted today: each lead counts once a day)") : "";
+        toast(got.bonusW ? `WON ${money(got.value)}. You earned ${money(commissionFor(got.value))}.` : `Logged: ${status} (+${got.points} pt${got.points === 1 ? "" : "s"})${why}`);
+        if (got.bonusW || got.bonusI) confetti();
+        if (got.bonusW) showAfterWon(lead, got.value);
         checkBadges();
       } catch (err) { console.error(err); toast(D.authMessage(err), "bad"); }
     });
@@ -945,7 +947,7 @@ function screenBoard() {
     <h1 class="page">Leaderboard</h1>
     <div class="chips"><button class="chip" data-b="today">Today</button><button class="chip" data-b="week">This week</button></div>
     <div id="boardBody"><div class="loading"><span class="spinner"></span></div></div>
-    <p class="muted small">Points: each call 1 · Interested +3 · Won +10. Weeks start Monday (Perth time).</p>`;
+    <p class="muted small">Points: each lead you call 1 (once a day) · Interested +3 · Won +10 (once per lead). Weeks start Monday (Perth time).</p>`;
   let rows = { today: [], week: [] };
   const draw = () => {
     if (!$("#boardBody")) return;
