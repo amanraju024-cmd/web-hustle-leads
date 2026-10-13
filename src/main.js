@@ -115,7 +115,7 @@ function errorBox(msg) { return msg ? `<div class="notice error">${esc(msg)}</di
 function renderShell() {
   const admin = isAdmin();
   const tabs = [
-    ["home", "Home", "⌂"], ["find", "Find leads", "⌕"], ["leads", "My leads", "☎"], ["board", "Leaderboard", "★"], ["reviews", "Review cards", "📲"], ["lockin", "Can't be bothered", "🔥"],
+    ["home", "Home", "⌂"], ["find", "Find leads", "⌕"], ["leads", "My leads", "☎"], ["board", "Leaderboard", "★"], ["chat", "Chat", "💬"], ["reviews", "Review cards", "📲"], ["lockin", "Can't be bothered", "🔥"],
     ...(admin ? [["admin", "Admin", "▦"]] : []),
   ];
   $("#app").innerHTML = `
@@ -131,7 +131,7 @@ function renderShell() {
       </div>
     </header>
     <nav class="tabs" aria-label="Main">
-      ${tabs.map(([id, label, icon]) => `<a href="#${id}" data-tab="${id}" class="${id === "lockin" ? "lockin-tab" : ""}"><span aria-hidden="true">${icon}</span>${label}</a>`).join("")}
+      ${tabs.map(([id, label, icon]) => `<a href="#${id}" data-tab="${id}" class="${id === "lockin" ? "lockin-tab" : ""}"><span aria-hidden="true">${icon}</span>${label}${id === "chat" ? '<em class="tab-badge" id="chatBadge" hidden></em>' : ""}</a>`).join("")}
     </nav>
     <main id="view" tabindex="-1"></main>
     <footer class="foot sig"><img src="logo.png" alt="" width="34" height="44"><div><b class="sig-name">AR METHODS</b><span>Founded &amp; run by <b>${esc(BRAND.ceo)}</b>, CEO · Perth, WA</span></div></footer>`;
@@ -155,6 +155,110 @@ function startCelebrations() {
     setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 5000);
     if (c.type === "won") confetti();
   });
+}
+
+// =====================================================================
+// Team chat
+// =====================================================================
+let chatUnsub = null;
+const chatSeenKey = () => `arm_chat_seen_${state.me?.id}`;
+const chatSeen = () => { try { return Number(localStorage.getItem(chatSeenKey())) || 0; } catch { return 0; } };
+const msgTime = (m) => toDate(m.at)?.getTime() || Date.now();
+function markChatSeen() {
+  const last = state.messages?.length ? msgTime(state.messages[state.messages.length - 1]) : Date.now();
+  try { localStorage.setItem(chatSeenKey(), String(last)); } catch {}
+  updateChatBadge();
+}
+function updateChatBadge() {
+  const el = $("#chatBadge");
+  if (!el) return;
+  const seen = chatSeen();
+  const n = (state.messages || []).filter((m) => m.uid !== state.me?.id && msgTime(m) > seen).length;
+  el.hidden = !n;
+  el.textContent = n > 99 ? "99+" : String(n);
+}
+function stopChat() { if (chatUnsub) { chatUnsub(); chatUnsub = null; } state.messages = []; }
+function startChat() {
+  stopChat();
+  const startedAt = Date.now();
+  let first = true;
+  chatUnsub = D.watchMessages((msgs) => {
+    const before = new Set((state.messages || []).map((m) => m.id));
+    state.messages = msgs;
+    const onChat = location.hash.startsWith("#chat");
+    if (onChat) { drawChat(); markChatSeen(); }
+    else {
+      updateChatBadge();
+      if (!first) msgs.filter((m) => !before.has(m.id) && m.uid !== state.me?.id && msgTime(m) > startedAt - 5000).forEach(chatPopup);
+    }
+    first = false;
+  }, () => {});
+}
+function chatPopup(m) {
+  const el = document.createElement("a");
+  el.href = "#chat";
+  el.className = "celebrate chat";
+  el.innerHTML = `<span class="ce-icon">💬</span><span><b>${esc(m.name)}${m.role === "admin" ? " (CEO)" : ""}:</b> ${esc(m.text.slice(0, 90))}${m.text.length > 90 ? "…" : ""}</span>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add("show"), 20);
+  setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 5000);
+}
+
+const QUICK_MSGS = ["Just closed one 💰", "On a roll today 🔥", "Anyone got a good line for “we use Facebook”?", "Taking a 10 min break ☕"];
+
+function screenChat() {
+  setTitle("Team chat");
+  view().innerHTML = `
+    <h1 class="page">Team chat</h1>
+    <section class="chat card">
+      <div class="chat-list" id="chatList" aria-live="polite"><div class="loading"><span class="spinner"></span></div></div>
+      <div class="chat-quick">${QUICK_MSGS.map((q, i) => `<button class="chip" data-q="${i}">${esc(q)}</button>`).join("")}</div>
+      <form class="chat-form" id="chatForm">
+        <textarea id="chatText" rows="1" maxlength="1000" placeholder="Message the team…" aria-label="Message"></textarea>
+        <button class="primary" aria-label="Send">Send</button>
+      </form>
+    </section>`;
+  const input = $("#chatText");
+  const send = async (text) => {
+    text = text.trim();
+    if (!text) return;
+    input.value = ""; input.style.height = "";
+    try { await D.sendMessage(state.me, text); }
+    catch (e) { input.value = text; toast(D.authMessage(e), "bad"); }
+  };
+  $("#chatForm").addEventListener("submit", (e) => { e.preventDefault(); send(input.value); input.focus(); });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); } });
+  input.addEventListener("input", () => { input.style.height = ""; input.style.height = Math.min(140, input.scrollHeight) + "px"; });
+  view().querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", () => send(QUICK_MSGS[Number(b.dataset.q)])));
+  drawChat();
+  markChatSeen();
+}
+
+function drawChat() {
+  const list = $("#chatList");
+  if (!list) return;
+  const msgs = state.messages || [];
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+  if (!msgs.length) { list.innerHTML = `<div class="empty">No messages yet. Say hi to the team 👋</div>`; return; }
+  let lastDay = "";
+  list.innerHTML = msgs.map((m) => {
+    const d = new Date(msgTime(m));
+    const day = perthDay(d);
+    const sep = day !== lastDay ? `<div class="chat-day">${esc(day === perthDay() ? "Today" : prettyDay(day))}</div>` : "";
+    lastDay = day;
+    const mine = m.uid === state.me.id;
+    return `${sep}<div class="msg ${mine ? "mine" : ""} ${m.role === "admin" ? "ceo" : ""}">
+      ${mine ? "" : `<span class="msg-name">${esc(m.name)}${m.role === "admin" ? ' <em class="role">CEO</em>' : ""}</span>`}
+      <div class="bubble">${esc(m.text).replace(/\n/g, "<br>")}</div>
+      <span class="msg-meta">${esc(fmtTime(d))}${isAdmin() ? ` · <button class="linkbtn" data-del="${esc(m.id)}">Delete</button>` : ""}</span>
+    </div>`;
+  }).join("");
+  if (nearBottom || !list.dataset.ready) list.scrollTop = list.scrollHeight;
+  list.dataset.ready = "1";
+  list.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Delete this message for everyone?")) return;
+    try { await D.deleteMessage(b.dataset.del); } catch (e) { toast(D.authMessage(e), "bad"); }
+  }));
 }
 
 const modalQueue = [];
@@ -192,7 +296,7 @@ async function route() {
   state.routeId = (state.routeId || 0) + 1;
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
-    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews,
+    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews, chat: screenChat,
     admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand,
   };
   const adminOnly = ["admin", "worker", "pool", "team", "report", "brand"];
@@ -285,6 +389,7 @@ function saveBoot(uid, data) { try { localStorage.setItem(BOOT_KEY(uid), JSON.st
 function startApp() {
   renderShell();
   startCelebrations();
+  startChat();
   route();
 }
 
@@ -310,7 +415,7 @@ D.onAuthStateChanged(D.auth, async (user) => {
     state.user = user;
     state.me = null;
   } else state.user = user;
-  if (!user) { try { localStorage.removeItem(LAST_KEY); } catch {} return renderAuth(); }
+  if (!user) { stopChat(); try { localStorage.removeItem(LAST_KEY); } catch {} return renderAuth(); }
   try { localStorage.setItem(LAST_KEY, user.uid); } catch {}
   const boot = readBoot(user.uid);
   if (alreadyShowing) {

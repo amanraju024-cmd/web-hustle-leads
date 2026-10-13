@@ -5,7 +5,7 @@ import {
   signOut, sendPasswordResetEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential,
 } from "firebase/auth";
 import {
-  initializeFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, collection,
+  initializeFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection,
   query, where, orderBy, limit, onSnapshot, runTransaction, writeBatch, serverTimestamp, documentId, Timestamp,
 } from "firebase/firestore";
 import { firebaseConfig } from "./config.js";
@@ -267,6 +267,16 @@ export async function getStatsFor(uid) {
 }
 
 // ---------- live team pop-ups ----------
+// ---------- team chat ----------
+export const sendMessage = (me, text) =>
+  addDoc(collection(db, "messages"), { uid: me.id, name: me.name, role: me.role, text: text.slice(0, 1000), at: serverTimestamp() });
+export const deleteMessage = (id) => deleteDoc(doc(db, "messages", id));
+export function watchMessages(cb, onErr) {
+  return onSnapshot(query(collection(db, "messages"), orderBy("at", "desc"), limit(200)),
+    { includeMetadataChanges: false },
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })).reverse()), onErr);
+}
+
 export function celebrate(me, type, text) {
   return addDoc(collection(db, "celebrations"), { uid: me.id, name: me.name, type, text: text.slice(0, 200), at: serverTimestamp() })
     .catch((e) => console.warn("celebration not saved", e));

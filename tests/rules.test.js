@@ -5,7 +5,7 @@ import {
   initializeTestEnvironment, assertFails, assertSucceeds,
 } from "@firebase/rules-unit-testing";
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where,
+  doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where,
   serverTimestamp, runTransaction,
 } from "firebase/firestore";
 
@@ -286,4 +286,18 @@ test("brand link and phone: admin only, sensible lengths", async () => {
   await assertFails(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, brandLink: "x".repeat(201) }));
   await assertFails(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, brandPhone: 400 }));
   await assertFails(setDoc(doc(as("w1"), "settings/team"), { dailyGoal: 30, brandLink: "https://evil.example" }));
+});
+
+test("team chat: post as yourself only, no editing, admin can delete", async () => {
+  const msgs = (uid) => collection(as(uid), "messages");
+  await assertSucceeds(addDoc(msgs("w1"), { uid: "w1", name: "Sam", role: "worker", text: "Just closed one!", at: serverTimestamp() }));
+  await assertFails(addDoc(msgs("w1"), { uid: "owner", name: "Aman Raju", role: "admin", text: "fake boss", at: serverTimestamp() }));
+  await assertFails(addDoc(msgs("w1"), { uid: "w1", name: "Aman Raju", role: "admin", text: "fake boss", at: serverTimestamp() }));
+  await assertFails(addDoc(msgs("w1"), { uid: "w1", name: "Sam", role: "worker", text: "", at: serverTimestamp() }));
+  await assertFails(addDoc(msgs("w1"), { uid: "w1", name: "Sam", role: "worker", text: "x".repeat(1001), at: serverTimestamp() }));
+  await setDoc(doc(as("w1"), "messages/m1"), { uid: "w1", name: "Sam", role: "worker", text: "hi", at: serverTimestamp() });
+  await assertFails(updateDoc(doc(as("w1"), "messages/m1"), { text: "edited" }));
+  await assertFails(deleteDoc(doc(as("w1"), "messages/m1")));
+  await assertSucceeds(deleteDoc(doc(as("owner"), "messages/m1")));
+  await assertSucceeds(getDocs(msgs("w1")));
 });
