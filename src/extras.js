@@ -55,6 +55,15 @@ export const OBJECTIONS = [
   ["“We already have someone.”", "No worries. If they ever drop the ball, keep my number. Want me to send a free mockup anyway so you've got something to compare?"],
 ];
 
+// NFC review cards: tap a phone on the card and the business's Google review page opens
+export const NFC = {
+  price: "$49 for 2 cards",
+  pitch: "One more thing: most of our clients grab a couple of tap-to-review cards for the counter. Your customer taps their phone on the card and your Google review page pops up, so getting reviews takes them five seconds. It's $49 for two. Want me to add them?",
+  bundle: "If it helps, I can do the website plus two tap-to-review cards for $549. The cards get you Google reviews from day one.",
+  objection: ["“Do people actually use them?”", "Asking for a review is awkward, so most businesses never do it. With the card on the counter you just say “tap here if you were happy” and it opens straight to the review page. More reviews means you show up higher on Google."],
+  text: (name, first) => `Hi, it's ${first} from AR Methods. Quick one: we've started doing tap-to-review cards for ${name}. Customers tap their phone on the card at the counter and it opens your Google review page, so you get way more reviews. $49 for two, and I'll set them up for you. Keen?`,
+};
+
 export const AFTER_WON = {
   upsell: "Most of our clients add our care plan — we host it, keep it updated and fix anything for a small monthly fee, so you never have to think about it. Want me to add that on?",
   referral: "Really glad we're working together. Do you know any other business owners who don't have a website yet? I'll look after them the same way.",

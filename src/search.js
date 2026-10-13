@@ -275,6 +275,20 @@ const PLACE_FIELDS = [
   "places.rating", "places.userRatingCount", "places.primaryTypeDisplayName", "nextPageToken",
 ].join(",");
 
+// ---------- review card links ----------
+export const reviewLink = (placeId) => `https://search.google.com/local/writereview?placeid=${encodeURIComponent(placeId)}`;
+
+/** Finds a business on Google Maps so we can build its "leave a review" link. One request. */
+export async function findPlaceForReview(text, key) {
+  if (!key) throw new SearchError("Google Maps isn't set up.");
+  const data = await placesRequest({ textQuery: text, regionCode: "AU", pageSize: 6 },
+    "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.googleMapsUri", key);
+  return (data.places || []).map((p) => ({
+    placeId: p.id, name: p.displayName?.text || "", address: p.formattedAddress || "",
+    rating: p.rating ?? null, reviews: p.userRatingCount ?? 0, mapsUrl: p.googleMapsUri || "",
+  }));
+}
+
 function placesGrid(viewport, n) {
   const lo = viewport.low, hi = viewport.high;
   const dlat = (hi.latitude - lo.latitude) / n, dlng = (hi.longitude - lo.longitude) / n;

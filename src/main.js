@@ -1,10 +1,10 @@
 // AR Methods Leads — app shell, routing and screens.
 import * as D from "./data.js";
-import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE } from "./search.js";
+import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE, findPlaceForReview, reviewLink } from "./search.js";
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, commissionTotal,
+  commissionFor, commissionTotal, NFC,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -115,7 +115,7 @@ function errorBox(msg) { return msg ? `<div class="notice error">${esc(msg)}</di
 function renderShell() {
   const admin = isAdmin();
   const tabs = [
-    ["home", "Home", "⌂"], ["find", "Find leads", "⌕"], ["leads", "My leads", "☎"], ["board", "Leaderboard", "★"], ["lockin", "Can't be bothered", "🔥"],
+    ["home", "Home", "⌂"], ["find", "Find leads", "⌕"], ["leads", "My leads", "☎"], ["board", "Leaderboard", "★"], ["reviews", "Review cards", "📲"], ["lockin", "Can't be bothered", "🔥"],
     ...(admin ? [["admin", "Admin", "▦"]] : []),
   ];
   $("#app").innerHTML = `
@@ -191,7 +191,7 @@ async function route() {
   state.routeId = (state.routeId || 0) + 1;
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
-    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin,
+    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews,
     admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport,
   };
   const adminOnly = ["admin", "worker", "pool", "team", "report"];
@@ -671,9 +671,10 @@ function scriptHtml(l) {
       <li><b>Hook</b><p>${esc(sc.hook)}</p></li>
       <li><b>Offer</b><p>${esc(sc.offer)}</p></li>
       <li><b>Close</b><p>${esc(sc.close)}</p></li>
+      <li class="upsell-step"><b>Bundle (if they're keen)</b><p>${esc(NFC.bundle)}</p></li>
     </ol>
     <h3 class="obj-h">If they say…</h3>
-    <dl class="objections">${OBJECTIONS.map(([q, a]) => `<dt>${esc(q)}</dt><dd>${esc(a)}</dd>`).join("")}</dl>
+    <dl class="objections">${[...OBJECTIONS, NFC.objection].map(([q, a]) => `<dt>${esc(q)}</dt><dd>${esc(a)}</dd>`).join("")}</dl>
   </details>`;
 }
 
@@ -729,8 +730,10 @@ function showAfterWon(lead, value) {
       <p class="muted">You earned <b>${money(commissionFor(value))}</b>. Before you hang up, squeeze more out of it:</p></div>
     <div class="after-won">
       <div><b>1. Care plan (monthly money)</b><p>${esc(AFTER_WON.upsell)}</p></div>
-      <div><b>2. Referral (free leads)</b><p>${esc(AFTER_WON.referral)}</p></div>
-      <div><b>3. Review (more trust)</b><p>${esc(AFTER_WON.review)}</p></div>
+      <div class="upsell-step"><b>2. Tap-to-review cards (${esc(NFC.price)})</b><p>${esc(NFC.pitch)}</p>
+        ${isAdmin() ? `<a class="ghost small" href="#reviews/${encodeURIComponent([lead.name, lead.suburb].filter(Boolean).join(" "))}" data-close>Make their review card link →</a>` : ""}</div>
+      <div><b>3. Referral (free leads)</b><p>${esc(AFTER_WON.referral)}</p></div>
+      <div><b>4. Review (more trust)</b><p>${esc(AFTER_WON.review)}</p></div>
     </div>`);
 }
 
@@ -1179,6 +1182,126 @@ function roastFor(calls, goal, name) {
   if (calls < goal / 3) return [`${calls} call${calls === 1 ? "" : "s"}. The goal is ${goal}. Maths clearly isn't the only thing you're avoiding.`, `${goal - calls} to go. Stop reading this and dial.`];
   if (calls < goal) return [`${calls} calls. Not bad. Not good either. ${goal - calls} short of the goal, ${first}.`, "Finish the job. Half-done calls pay half-nothing."];
   return [`${calls} calls. Goal smashed. Fine, you're not useless today.`, "Do 10 more and I might even be nice to you."];
+}
+
+// =====================================================================
+// Review cards: Google review links for NFC cards, plus the upsell
+// =====================================================================
+function reviewCardMock(name, rating) {
+  const stars = Math.round(rating ?? 5);
+  return `<div class="rv-card" aria-hidden="true">
+      <div class="rv-sheen"></div>
+      <div class="rv-card-top"><span class="rv-g small">G</span><span class="rv-nfc"><i></i><i></i><i></i></span></div>
+      <div class="rv-stars">${"★".repeat(stars)}<span>${"★".repeat(5 - stars)}</span></div>
+      <b class="rv-name">${esc(name)}</b>
+      <small>Tap your phone here to leave us a review</small>
+    </div>`;
+}
+
+async function screenReviews(arg) {
+  setTitle("Review cards");
+  const rid = state.routeId;
+  const first = (state.me.name || "").split(" ")[0];
+  const preset = arg ? decodeURIComponent(arg) : "";
+  const hero = (locked) => `
+    <section class="rv-hero${locked ? " rv-locked" : ""}">
+      <div class="rv-copy">
+        <span class="rv-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <h1 class="rv-title">Tap. Review.<br><span>Rank higher.</span></h1>
+        <p>Tap-to-review NFC cards. A customer taps their phone on the card and the business's Google review page opens. No typing, no searching.</p>
+        <span class="rv-price">${esc(NFC.price)}</span>
+      </div>
+      <div class="rv-stage">${reviewCardMock("Your business", 5)}</div>
+      ${locked ? `<div class="rv-lock"><span aria-hidden="true">🔒</span><b>Admin only</b><small>Review cards are handled by Aman. If a client wants them, mark the deal as Won and let Aman know.</small></div>` : ""}
+    </section>`;
+  if (!isAdmin()) { view().innerHTML = `<div class="rv">${hero(true)}</div>`; return; }
+  view().innerHTML = `<div class="rv">
+    ${hero(false)}
+    <section class="rv-panel">
+      <div class="rv-head"><span class="rv-num">1</span><div><h2>Make the review link</h2><p class="muted small">Find the business on Google Maps and get its “write a review” link.</p></div></div>
+      <form id="revForm" class="rv-search">
+        <span class="rv-g" aria-hidden="true">G</span>
+        <input id="revQ" placeholder="Business name and suburb, e.g. Fade Factory Willetton" value="${esc(preset)}" required autocomplete="off">
+        <button class="primary" id="revBtn">Find</button>
+      </form>
+      <div id="revResults"></div>
+    </section>
+    <section class="rv-panel">
+      <div class="rv-head"><span class="rv-num">2</span><div><h2>Sell more of them</h2><p class="muted small">Word-for-word lines that get the extra ${esc(NFC.price.split(" ")[0])}.</p></div></div>
+      <div class="rv-pitches">
+        <article class="rv-pitch hot"><span class="rv-tag">After they say yes</span><p>${esc(NFC.pitch)}</p></article>
+        <article class="rv-pitch"><span class="rv-tag">Bundle on the call</span><p>${esc(NFC.bundle)}</p></article>
+        <article class="rv-pitch"><span class="rv-tag">${esc(NFC.objection[0].replace(/[“”]/g, ""))}</span><p>${esc(NFC.objection[1])}</p></article>
+      </div>
+      <h3 class="obj-h">Text your past clients</h3>
+      <div id="revClients"><div class="loading"><span class="spinner"></span></div></div>
+    </section></div>`;
+
+  const results = $("#revResults");
+  const showLink = (p) => {
+    const link = reviewLink(p.placeId);
+    const stage = $(".rv-stage");
+    if (stage) stage.innerHTML = reviewCardMock(p.name, p.rating);
+    results.innerHTML = `<div class="rev-link">
+        <p class="rv-ok"><span aria-hidden="true">✓</span> Link ready for <b>${esc(p.name)}</b></p>
+        <p class="muted small">${esc(p.address)}</p>
+        <code id="revUrl">${esc(link)}</code>
+        <div class="toolbar">
+          <button class="primary small" id="revCopy">Copy link</button>
+          <a class="ghost small" href="${esc(link)}" target="_blank" rel="noopener">Test it</a>
+          <button class="ghost small" id="revAgain">Search again</button>
+        </div>
+        <p class="muted small">Opens the "write a review" box for this business. Put this link on the NFC card.</p>
+      </div>`;
+    $("#revCopy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(link); toast("Review link copied"); }
+      catch { toast("Couldn't copy. Press and hold the link to copy it.", "bad"); }
+    });
+    $("#revAgain").addEventListener("click", () => { results.innerHTML = ""; $("#revQ").focus(); });
+  };
+  const search = async () => {
+    const q = $("#revQ").value.trim();
+    if (!q) return;
+    const btn = $("#revBtn");
+    btn.disabled = true;
+    results.innerHTML = `<div class="loading"><span class="spinner"></span>Searching Google Maps…</div>`;
+    try {
+      const places = await findPlaceForReview(/perth|wa\b|western australia/i.test(q) ? q : `${q} WA`, GOOGLE_MAPS_KEY);
+      if (rid !== state.routeId) return;
+      if (!places.length) { results.innerHTML = `<div class="notice">No match on Google Maps. Check the spelling or add the suburb. The business needs a Google Maps listing to get reviews.</div>`; return; }
+      results.innerHTML = `<p class="muted small">Pick the right business:</p><div class="rev-picks">${places.map((p, i) =>
+        `<button class="rev-pick" data-i="${i}"><b>${esc(p.name)}</b><span class="muted small">${esc(p.address)}</span>${p.rating != null ? `<span class="small">⭐ ${p.rating} (${p.reviews})</span>` : `<span class="small muted">No reviews yet</span>`}</button>`).join("")}</div>`;
+      results.querySelectorAll(".rev-pick").forEach((b) => b.addEventListener("click", () => showLink(places[Number(b.dataset.i)])));
+      if (places.length === 1) showLink(places[0]);
+    } catch (e) {
+      if (rid !== state.routeId) return;
+      results.innerHTML = errorBox(e instanceof SearchError ? e.message : "Couldn't search Google Maps. Try again.");
+    } finally { btn.disabled = false; }
+  };
+  $("#revForm").addEventListener("submit", (e) => { e.preventDefault(); search(); });
+  if (preset) search();
+
+  // Past clients (deals you've won) with a ready-to-send text
+  try {
+    const won = (await D.getLeadsFor(state.me.id)).filter((l) => l.status === "Won");
+    if (rid !== state.routeId) return;
+    const box = $("#revClients");
+    if (!won.length) { box.innerHTML = `<p class="muted small">Once you win deals, your clients show up here with a text ready to send them.</p>`; return; }
+    box.innerHTML = `<div class="rev-clients">${won.map((l, i) => {
+      const phone = cleanPhone(l.phone || "");
+      const body = encodeURIComponent(NFC.text(l.name, first));
+      return `<div class="rev-client"><div><b>${esc(l.name)}</b><span class="muted small">${esc(l.phone || "")}</span></div>
+        <div class="toolbar">
+          ${phone.valid ? `<a class="primary small" href="sms:${esc(phone.tel)}?&body=${body}">Text them</a>` : ""}
+          <button class="ghost small" data-copy="${i}">Copy text</button>
+          <a class="ghost small" href="#reviews/${encodeURIComponent([l.name, l.suburb].filter(Boolean).join(" "))}">Make link</a>
+        </div></div>`;
+    }).join("")}</div>`;
+    box.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(NFC.text(won[Number(b.dataset.copy)].name, first)); toast("Text copied"); }
+      catch { toast("Couldn't copy", "bad"); }
+    }));
+  } catch (e) { const box = $("#revClients"); if (box) box.innerHTML = errorBox(D.authMessage(e)); }
 }
 
 function screenLockin() {
