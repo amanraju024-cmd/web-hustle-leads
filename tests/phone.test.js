@@ -68,3 +68,13 @@ test("care plan billing maths", () => {
   assert.deepEqual(s.dueSoon.map((p) => p.due), ["2026-10-15"]);
   assert.equal(s.cancelledThisMonth, 1);
 });
+
+import { commissionSplit } from "../src/extras.js";
+test("commission only counts once paid in full", () => {
+  const calls = [
+    { status: "Won", value: 800, leadId: "a" }, { status: "Won", value: 300, leadId: "b" },
+    { status: "Won", value: 600, leadId: "c" }, { status: "Interested", leadId: "d" },
+  ];
+  const s = commissionSplit(calls, new Map([["a", "paid"], ["b", "deposit"]]));
+  assert.equal(s.paid, 100); assert.equal(s.pending, 30 + 100);
+});

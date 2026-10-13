@@ -252,3 +252,20 @@ export function careStats(plans, today) {
     cancelledThisMonth: plans.filter((p) => p.status === "cancelled" && (p.cancelDay || "").startsWith(month)).length,
     newThisMonth: plans.filter((p) => p.startDay.startsWith(month)).length };
 }
+
+// =====================================================================
+// Payment on won deals: commission only counts once the client has paid in full
+// =====================================================================
+export const PAY_STEPS = [["unpaid", "Unpaid"], ["deposit", "Deposit paid"], ["paid", "Paid in full"]];
+export const payOf = (lead) => (lead && PAY_STEPS.some(([k]) => k === lead.payment) ? lead.payment : "unpaid");
+export const payLabel = (k) => (PAY_STEPS.find(([id]) => id === k) || PAY_STEPS[0])[1];
+/** Splits commission on won calls into paid (client paid in full) and pending. */
+export function commissionSplit(calls, paymentByLead) {
+  let paid = 0, pending = 0;
+  for (const c of calls) {
+    if (c.status !== "Won" || !(c.value > 0)) continue;
+    const amt = commissionFor(c.value);
+    if (paymentByLead.get(c.leadId) === "paid") paid += amt; else pending += amt;
+  }
+  return { paid: Math.round(paid * 100) / 100, pending: Math.round(pending * 100) / 100 };
+}

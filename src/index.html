@@ -320,6 +320,25 @@
   .objections { margin: 0; display: grid; gap: 8px; }
   .objections dt { font-weight: 700; }
   .objections dd { margin: 2px 0 0; color: var(--muted); }
+  /* ---------- payment on won deals ---------- */
+  .pay { margin: 12px 0; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(244,196,106,.35); background: rgba(244,196,106,.06); }
+  .pay.pay-paid { border-color: rgba(95,224,160,.45); background: rgba(95,224,160,.08); }
+  .pay-label { display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .pay-steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pay-step { font: inherit; font-size: 13px; font-weight: 700; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: rgba(0,0,0,.25); color: var(--muted); cursor: pointer; }
+  .pay-step:disabled { cursor: default; }
+  .pay-step.done { color: var(--text); border-color: rgba(244,196,106,.5); }
+  .pay-step.cur { background: linear-gradient(135deg, #f0cf86, var(--gold)); color: #1a1205; border-color: transparent; }
+  .pay-paid .pay-step.cur { background: linear-gradient(135deg, #8ff0bd, var(--good)); }
+  .pay-arrow { color: var(--faint); font-size: 12px; }
+  .pay p { margin: 8px 0 0; }
+  .pending-line { display: block; color: var(--warn); font-size: 12px; margin-bottom: 2px; }
+  .pay-select { padding: 6px 10px; border-radius: 10px; font-size: 13px; font-weight: 700; }
+  .pay-select.pay-paid { color: var(--good); } .pay-select.pay-deposit { color: var(--gold); } .pay-select.pay-unpaid { color: var(--warn); }
+  .unpaid-card b.num { color: var(--warn); }
+  .unpaid-list li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; font-size: 13px; padding: 6px 0; }
+  .pay-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(244,196,106,.12); color: var(--warn); }
+  .pay-tag.pay-deposit { color: var(--gold); background: rgba(226,185,104,.12); }
   /* ---------- care plans ---------- */
   .care-quick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding: 0 !important; border: 0 !important; background: none !important; }
   .care-quick .cur { font-weight: 800; color: var(--gold); }

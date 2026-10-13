@@ -390,3 +390,8 @@ test("admin can correct a won deal's amount; workers can't", async () => {
   const c = await getDoc(doc(as("owner"), "calls/c1"));
   assert1(c.data().value === 800, "amount corrected");
 });
+
+test("only admin marks a deal as paid", async () => {
+  await assertFails(updateDoc(doc(as("w1"), "leads/sam1"), { payment: "paid", paymentAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(as("owner"), "leads/sam1"), { payment: "deposit", paymentAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+});

@@ -4,7 +4,7 @@ import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVER
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, commissionTotal, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, careStats, monthsBilled,
+  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -464,9 +464,9 @@ D.onAuthStateChanged(D.auth, async (user) => {
 // =====================================================================
 // Home
 // =====================================================================
-const slimLead = (l) => ({ id: l.id, name: l.name, phone: l.phone, status: l.status, suburb: l.suburb || "",
+const slimLead = (l) => ({ id: l.id, name: l.name, phone: l.phone, status: l.status, suburb: l.suburb || "", payment: l.payment || "",
   callbackAt: toDate(l.callbackAt)?.getTime() ?? null, lastCalledAt: toDate(l.lastCalledAt)?.getTime() ?? null });
-const slimCall = (c) => ({ status: c.status, value: c.value || 0, day: c.day });
+const slimCall = (c) => ({ status: c.status, value: c.value || 0, day: c.day, leadId: c.leadId });
 
 async function screenHome() {
   setTitle("Home");
@@ -476,7 +476,8 @@ async function screenHome() {
   view().innerHTML = `<h1 class="page">${greet}, ${esc(state.me.name.split(" ")[0])}</h1><div id="homeBody"><div class="loading"><span class="spinner"></span></div></div>`;
   const rid = state.routeId;
   const monthStart = today.slice(0, 8) + "01";
-  const HOME_KEY = `arm_home_${state.me.id}`;
+  const HOME_KEY = `arm_home2_${state.me.id}`; // v2: calls keep leadId (payment-aware commission)
+  try { localStorage.removeItem(`arm_home_${state.me.id}`); } catch {}
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(HOME_KEY) || "null"); } catch {}
   const revive = (l) => ({ ...l, callbackAt: l.callbackAt ? D.Timestamp.fromMillis(l.callbackAt) : null, lastCalledAt: l.lastCalledAt ? D.Timestamp.fromMillis(l.lastCalledAt) : null });
@@ -486,7 +487,7 @@ async function screenHome() {
     [mine, leads, myCalls] = [cached.mine, cached.leads.map(revive), cached.calls];
     load.then(([m, l, c]) => {
       if (rid !== state.routeId) return;
-      const sig = (ls, cs, ms) => JSON.stringify([ms.length, cs.length, ls.map((x) => [x.id, x.status, toDate(x.callbackAt)?.getTime() ?? null])]);
+      const sig = (ls, cs, ms) => JSON.stringify([ms.length, cs.length, ls.map((x) => [x.id, x.status, x.payment || "", toDate(x.callbackAt)?.getTime() ?? null])]);
       const same = sig(l, c, m) === sig(leads, myCalls, mine);
       try { localStorage.setItem(HOME_KEY, JSON.stringify({ day: today, mine: m, leads: l.map(slimLead), calls: c.map(slimCall) })); } catch {}
       if (!same) screenHome();
@@ -497,7 +498,7 @@ async function screenHome() {
   }
   if (rid !== state.routeId) return;
   const monthWon = myCalls.filter((c) => c.status === "Won" && c.day >= monthStart);
-  const earnedMonth = commissionTotal(monthWon);
+  const comm = commissionSplit(monthWon, new Map(leads.map((l) => [l.id, payOf(l)])));
   const draw = (todayRows) => {
     if (!$("#homeBody")) return;
     const board = D.leaderboard(todayRows);
@@ -546,8 +547,9 @@ async function screenHome() {
         <p class="muted small">Warm leads go cold fast. A quick follow-up text wins deals.</p>
       </section>` : ""}
       <section class="card earn">
-        <div><span class="muted">Your commission this month</span><b class="num">${money(earnedMonth)}</b>
-          <small class="muted">${monthWon.length} deal${monthWon.length === 1 ? "" : "s"} closed · $100 per site of $500+, 10% under $500</small></div>
+        <div><span class="muted">Your commission this month</span><b class="num">${money(comm.paid)}</b>
+          ${comm.pending ? `<small class="pending-line">+ ${money(comm.pending)} pending: counts once the client pays in full</small>` : ""}
+          <small class="muted">${monthWon.length} deal${monthWon.length === 1 ? "" : "s"} closed · $100 per paid site of $500+, 10% under $500</small></div>
         <span class="earn-icon" aria-hidden="true">💵</span>
       </section>
       <section class="card">
@@ -784,6 +786,15 @@ function toLocalInput(ts) {
 }
 function fromLocalInput(v) { return v ? D.Timestamp.fromDate(new Date(v + ":00+08:00")) : null; }
 
+function payHtml(l) {
+  const cur = PAY_STEPS.findIndex(([k]) => k === payOf(l));
+  return `<div class="pay pay-${esc(payOf(l))}">
+    <span class="pay-label">💳 Payment</span>
+    <div class="pay-steps">${PAY_STEPS.map(([k, label], i) => `<button class="pay-step ${i <= cur ? "done" : ""} ${i === cur ? "cur" : ""}" data-pay="${k}" ${isAdmin() ? "" : "disabled"}>${i <= cur && i > 0 ? "✓ " : ""}${esc(label)}</button>`).join('<span class="pay-arrow" aria-hidden="true">→</span>')}</div>
+    <p class="small muted">${isAdmin() ? "Tap to update when the client pays." : "Aman updates this when the client pays. Your commission counts once it's paid in full."}</p>
+  </div>`;
+}
+
 function scoreChip(l) {
   const sc = leadScore(l);
   return sc ? `<span class="score ${isHot(sc) ? "hot" : ""}" title="Lead score: busy, well-reviewed businesses with no website score highest">${isHot(sc) ? "🔥 " : ""}${sc}</span>` : "";
@@ -811,6 +822,7 @@ function myLeadCard(l, now) {
         ${due ? `<p class="due-line">Call back ${esc(fmtDateTime(l.callbackAt))}</p>` : ""}
         <p class="row">${phoneHtml(l.phone)} <button class="linkbtn" data-texts>💬 Texts</button> ${leadLinks(l)}</p>
         ${siteHint(l)}
+        ${D.hadWon(l) ? payHtml(l) : ""}
         <div class="log">
           <label for="n-${esc(l.id)}">Notes</label>
           <textarea id="n-${esc(l.id)}" rows="2" maxlength="2000" placeholder="Who you spoke to, what they said…">${esc(l.notes)}</textarea>
@@ -859,6 +871,11 @@ function showTexts(lead) {
 function wireLeadCard(card) {
   const lead = state.myLeads.find((l) => l.id === card.dataset.id);
   card.querySelector("[data-texts]")?.addEventListener("click", () => showTexts(lead));
+  card.querySelectorAll("[data-pay]").forEach((b) => b.addEventListener("click", async () => {
+    if (!isAdmin() || b.dataset.pay === payOf(lead)) return;
+    try { await D.setPayment(state.me, lead, b.dataset.pay); toast(`${lead.name}: ${payLabel(b.dataset.pay)}`); if (b.dataset.pay === "paid") confetti(); }
+    catch (err) { toast(D.authMessage(err), "bad"); }
+  }));
   const notes = card.querySelector("textarea");
   const cbBox = card.querySelector(".cb");
   const cbInput = card.querySelector('input[type="datetime-local"]');
@@ -890,7 +907,7 @@ function wireLeadCard(card) {
         if (state.callMode) state.callDone?.add(lead.id);
         document.activeElement?.blur();
         const why = !got.points ? (status === "Interested" ? " (already counted: Interested points only count once per lead)" : " (already counted today: each lead counts once a day)") : "";
-        toast(got.bonusW ? `WON ${money(got.value)}. You earned ${money(commissionFor(got.value))}.` : `Logged: ${status} (+${got.points} pt${got.points === 1 ? "" : "s"})${why}`);
+        toast(got.bonusW ? `WON ${money(got.value)}. You'll earn ${money(commissionFor(got.value))} once they pay.` : `Logged: ${status} (+${got.points} pt${got.points === 1 ? "" : "s"})${why}`);
         if (got.bonusW || got.bonusI) confetti();
         if (got.bonusW) showAfterWon(lead, got.value);
         checkBadges();
@@ -910,7 +927,7 @@ function wireLeadCard(card) {
 function showAfterWon(lead, value) {
   showModal(`<div class="won-head"><span>💰</span><h2>${esc(lead.name)} is in. ${money(value)}.</h2>
       <p class="won-brand">Another ${esc(BRAND.name)} client. Send them the thank-you text from their lead card.</p>
-      <p class="muted">You earned <b>${money(commissionFor(value))}</b>. Before you hang up, squeeze more out of it:</p></div>
+      <p class="muted">You'll earn <b>${money(commissionFor(value))}</b> once they pay in full. Before you hang up, squeeze more out of it:</p></div>
     <div class="after-won">
       <div><b>1. Care plan (monthly money)</b><p>${esc(AFTER_WON.upsell)}</p>
         <form class="care-quick" id="careQuick"><span class="cur">$</span><input type="number" id="careAmt" min="1" max="10000" step="1" value="${CARE_DEFAULT}" aria-label="Monthly amount"><span class="muted small">/month</span>
@@ -1023,7 +1040,11 @@ function adminNav(active) {
 // Admin: money on the table + best hours to call
 async function drawMoney(today, rid) {
   try {
-    const [interested, calls, plans] = await Promise.all([D.getLeadsWithStatus("Interested"), D.getCallsSince(addDays(today, -30)), D.getCarePlans().catch(() => [])]);
+    const [interested, calls, plans, wonCalls] = await Promise.all([D.getLeadsWithStatus("Interested"), D.getCallsSince(addDays(today, -30)), D.getCarePlans().catch(() => []), D.getWonCalls().catch(() => [])]);
+    const wonLeads = await D.getLeadsByIds(wonCalls.map((c) => c.leadId)).catch(() => []);
+    const payMap = new Map(wonLeads.map((l) => [l.id, payOf(l)]));
+    const unpaid = wonCalls.filter((c) => payMap.get(c.leadId) !== "paid").map((c) => ({ ...c, pay: payMap.get(c.leadId) || "unpaid" }));
+    const owedToYou = unpaid.reduce((n, c) => n + c.value, 0);
     const care = careStats(plans, today);
     if (rid !== state.routeId || !$("#moneyBox")) return;
     const wonVals = calls.filter((c) => c.status === "Won" && c.value > 0).map((c) => c.value);
@@ -1041,6 +1062,12 @@ async function drawMoney(today, rid) {
         <small class="muted">${interested.length} interested lead${interested.length === 1 ? "" : "s"} × ${money(avg)} average deal${wonVals.length ? "" : " (default until you close some)"}</small>
         ${stale.length ? `<p class="warn-line">⚠️ ${stale.length} going cold: no contact for 3+ days. ${stale.slice(0, 3).map((l) => `<b>${esc(l.name)}</b> (${esc(l.assignedName || "unassigned")})`).join(", ")}${stale.length > 3 ? "…" : ""}</p>` : ""}
         <small class="muted">Close rate (last 30 days): <b>${pct(closeRate)}</b> of answered calls</small>
+      </div>
+      <div class="card unpaid-card">
+        <span class="muted">Waiting to be paid</span>
+        <b class="num">${money(owedToYou)}</b>
+        <small class="muted">${unpaid.length} won deal${unpaid.length === 1 ? "" : "s"} not paid in full yet</small>
+        ${unpaid.length ? `<ul class="plain unpaid-list">${unpaid.slice(0, 5).map((c) => `<li><a href="#worker/${esc(c.uid)}">${esc(c.leadName)}</a><span>${esc(money(c.value))}</span><span class="pay-tag pay-${esc(c.pay)}">${esc(payLabel(c.pay))}</span></li>`).join("")}</ul>` : ""}
       </div>
       <a class="card care-card" href="#care">
         <span class="muted">Care plans: monthly income</span>
@@ -1174,6 +1201,8 @@ async function screenWorker(uid) {
   view().innerHTML = `${adminNav("")}<h1 class="page">${esc(user.name)}</h1><div id="wBody"><div class="loading"><span class="spinner"></span></div></div>`;
   const rid = state.routeId;
   const [stats, leads, calls, searches] = await Promise.all([D.getStatsFor(uid), D.getLeadsFor(uid), D.getCallsFor(uid), D.getSearchesFor(uid)]);
+  const wonLeads = await D.getLeadsByIds(calls.filter((c) => c.status === "Won").map((c) => c.leadId)).catch(() => []);
+  const leadById = new Map(wonLeads.map((l) => [l.id, l]));
   if (rid !== state.routeId || !$("#wBody")) return;
   const today = perthDay();
   const days = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13));
@@ -1215,9 +1244,12 @@ async function screenWorker(uid) {
     ${(() => {
       const deals = calls.filter((c) => c.status === "Won" && c.value != null);
       return `<section class="card"><h2>Deals won</h2>
-      ${deals.length ? `<div class="tablewrap"><table class="board"><thead><tr><th>When</th><th>Business</th><th class="n">Amount</th><th class="n">Commission</th><th></th></tr></thead><tbody>
+      ${deals.length ? (() => { const sp = commissionSplit(deals, new Map(wonLeads.map((l) => [l.id, payOf(l)]))); return `<p class="muted small">Commission owed (paid deals): <b>${esc(money(sp.paid))}</b>${sp.pending ? ` · ${esc(money(sp.pending))} pending until clients pay` : ""}</p>`; })() : ""}
+      ${deals.length ? `<div class="tablewrap"><table class="board"><thead><tr><th>When</th><th>Business</th><th class="n">Amount</th><th class="n">Commission</th><th>Payment</th><th></th></tr></thead><tbody>
         ${deals.map((c) => `<tr><td>${esc(fmtDateTime(c.createdAt))}</td><td>${esc(c.leadName)}</td><td class="n"><b>${esc(money(c.value))}</b>${c.editedAt ? ' <span class="muted small" title="Edited by admin">(edited)</span>' : ""}</td>
-          <td class="n">${esc(money(commissionFor(c.value)))}</td><td><button class="linkbtn" data-edit-deal="${esc(c.id)}">Edit amount</button></td></tr>`).join("")}
+          <td class="n">${esc(money(commissionFor(c.value)))}</td>
+          <td>${leadById.has(c.leadId) ? `<select class="pay-select pay-${esc(payOf(leadById.get(c.leadId)))}" data-pay-lead="${esc(c.leadId)}" aria-label="Payment">${PAY_STEPS.map(([k, label]) => `<option value="${k}" ${payOf(leadById.get(c.leadId)) === k ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>` : '<span class="muted">—</span>'}</td>
+          <td><button class="linkbtn" data-edit-deal="${esc(c.id)}">Edit amount</button></td></tr>`).join("")}
       </tbody></table></div>` : `<div class="empty">No deals yet.</div>`}</section>`;
     })()}
     <section class="card"><h2>Recent calls</h2>
@@ -1228,6 +1260,11 @@ async function screenWorker(uid) {
     <section class="card"><h2>Recent searches</h2>
       ${searches.length ? `<ul class="plain">${searches.slice(0, 30).map((s) => `<li>${esc(fmtDateTime(s.createdAt))} · ${esc(s.category)} in ${esc(s.suburb)} · ${s.results} results, ${s.noWebsite} with no website</li>`).join("")}</ul>` : `<div class="empty">No searches yet.</div>`}
     </section>`;
+  view().querySelectorAll("[data-pay-lead]").forEach((sel) => sel.addEventListener("change", async () => {
+    const lead = leadById.get(sel.dataset.payLead);
+    try { await D.setPayment(state.me, lead, sel.value); toast(`${lead.name}: ${payLabel(sel.value)}`); screenWorker(uid); }
+    catch (err) { toast(D.authMessage(err), "bad"); }
+  }));
   view().querySelectorAll("[data-edit-deal]").forEach((b) => b.addEventListener("click", () => {
     const call = calls.find((c) => c.id === b.dataset.editDeal);
     showModal(`<h2>Edit deal amount</h2>
@@ -1791,10 +1828,14 @@ async function screenReport(arg) {
   view().innerHTML = `${adminNav("report")}<h1 class="page">Weekly report</h1><div id="repBody"><div class="loading"><span class="spinner"></span></div></div>`;
   const rid = state.routeId;
   const [rows, users, calls] = await Promise.all([D.getStatsForWeek(week), D.listUsers(), D.getCallsForWeek(week)]);
+  const wonLeads = await D.getLeadsByIds(calls.filter((c) => c.status === "Won").map((c) => c.leadId)).catch(() => []);
   if (rid !== state.routeId || !$("#repBody")) return;
   const rep = weeklyReport(rows, users, week);
-  const commissionBy = (uid) => commissionTotal(calls.filter((c) => c.uid === uid));
+  const payMap = new Map(wonLeads.map((l) => [l.id, payOf(l)]));
+  const splitBy = (uid) => commissionSplit(calls.filter((c) => c.uid === uid), payMap);
+  const commissionBy = (uid) => splitBy(uid).paid;
   const totalCommission = rep.list.reduce((n, u) => n + commissionBy(u.uid), 0);
+  const totalPending = rep.list.reduce((n, u) => n + splitBy(u.uid).pending, 0);
   const label = `${prettyDay(week)} – ${prettyDay(addDays(week, 6))}`;
   const winner = rep.list.find((u) => u.points > 0);
   $("#repBody").innerHTML = `
@@ -1807,15 +1848,15 @@ async function screenReport(arg) {
       <div class="tile"><span>Calls</span><b class="num">${rep.team.calls}</b></div>
       <div class="tile"><span>Interested</span><b class="num">${rep.team.interested}</b></div>
       <div class="tile"><span>Deals won</span><b class="num">${rep.team.won}</b><small>${rep.team.calls ? pct(rep.team.won / rep.team.calls) + " of calls" : ""}</small></div>
-      <div class="tile"><span>Sales</span><b class="num">${money(rep.team.revenue)}</b><small>${money(totalCommission)} commission owed</small></div>
+      <div class="tile"><span>Sales</span><b class="num">${money(rep.team.revenue)}</b><small>${money(totalCommission)} commission owed${totalPending ? ` · ${money(totalPending)} pending payment` : ""}</small></div>
     </section>
     ${winner ? `<div class="notice info">🏆 Worker of the week: <b>${esc(winner.name)}</b> with ${winner.points} points (${winner.calls} calls, ${winner.won} won).</div>` : ""}
     <section class="card"><h2>By worker</h2>
       <div class="tablewrap"><table class="board">
-        <thead><tr><th>Name</th><th class="n">Calls</th><th class="n">Interested</th><th class="n">Won</th><th class="n">Win rate</th><th class="n">Sales</th><th class="n">Commission</th><th class="n">Days active</th><th>Best day</th></tr></thead>
+        <thead><tr><th>Name</th><th class="n">Calls</th><th class="n">Interested</th><th class="n">Won</th><th class="n">Win rate</th><th class="n">Sales</th><th class="n">Commission (paid)</th><th class="n">Days active</th><th>Best day</th></tr></thead>
         <tbody>${rep.list.map((u) => `<tr><td><a href="#worker/${esc(u.uid)}">${esc(u.name)}</a></td>
           <td class="n">${u.calls}</td><td class="n">${u.interested}</td><td class="n">${u.won}</td><td class="n">${pct(u.conversion)}</td>
-          <td class="n">${money(u.revenue)}</td><td class="n"><b>${money(commissionBy(u.uid))}</b></td><td class="n">${u.activeDays}/7</td>
+          <td class="n">${money(u.revenue)}</td><td class="n"><b>${money(commissionBy(u.uid))}</b>${splitBy(u.uid).pending ? `<br><small class="muted">+${money(splitBy(u.uid).pending)} pending</small>` : ""}</td><td class="n">${u.activeDays}/7</td>
           <td>${u.best.calls ? `${esc(prettyDay(u.best.day))} (${u.best.calls})` : '<span class="muted">—</span>'}</td></tr>`).join("")}</tbody>
       </table></div>
       <div class="toolbar"><button class="primary small" id="copyRep">Copy summary</button><button class="ghost small" id="csvRep">Download CSV</button></div>

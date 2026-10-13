@@ -293,6 +293,25 @@ export async function editDealValue(me, call, newValue) {
   return value;
 }
 
+/** Admin: payment progress on a won deal (unpaid → deposit → paid). */
+export async function setPayment(me, lead, step) {
+  await updateDoc(doc(db, "leads", lead.id), { payment: step, paymentAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  const words = { unpaid: "unpaid", deposit: "deposit paid", paid: "paid in full 💵" };
+  logEvent(me, "payment", `marked ${lead.name} as ${words[step]}`, { leadId: lead.id });
+}
+export async function getLeadsByIds(ids) {
+  const out = [];
+  for (const part of chunk([...new Set(ids.filter(Boolean))], 30)) {
+    const snap = await getDocs(query(collection(db, "leads"), where(documentId(), "in", part)));
+    snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+  }
+  return out;
+}
+export async function getWonCalls() {
+  const snap = await getDocs(query(collection(db, "calls"), where("status", "==", "Won")));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => c.value > 0);
+}
+
 // ---------- stats ----------
 export function watchStats(field, value, cb, onErr) {
   return onSnapshot(query(collection(db, "stats"), where(field, "==", value)),
