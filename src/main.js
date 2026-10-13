@@ -1212,6 +1212,14 @@ async function screenWorker(uid) {
     <section class="card"><h2>Leads by status</h2>
       <p>${D.STATUSES.map((s) => `<span class="status s-${s.replace(/\s/g, "")}">${esc(s)}: ${statusCounts[s] || 0}</span>`).join(" ")}</p>
     </section>
+    ${(() => {
+      const deals = calls.filter((c) => c.status === "Won" && c.value != null);
+      return `<section class="card"><h2>Deals won</h2>
+      ${deals.length ? `<div class="tablewrap"><table class="board"><thead><tr><th>When</th><th>Business</th><th class="n">Amount</th><th class="n">Commission</th><th></th></tr></thead><tbody>
+        ${deals.map((c) => `<tr><td>${esc(fmtDateTime(c.createdAt))}</td><td>${esc(c.leadName)}</td><td class="n"><b>${esc(money(c.value))}</b>${c.editedAt ? ' <span class="muted small" title="Edited by admin">(edited)</span>' : ""}</td>
+          <td class="n">${esc(money(commissionFor(c.value)))}</td><td><button class="linkbtn" data-edit-deal="${esc(c.id)}">Edit amount</button></td></tr>`).join("")}
+      </tbody></table></div>` : `<div class="empty">No deals yet.</div>`}</section>`;
+    })()}
     <section class="card"><h2>Recent calls</h2>
       ${calls.length ? `<div class="tablewrap"><table class="board"><thead><tr><th>When</th><th>Business</th><th>Result</th><th>Notes</th></tr></thead><tbody>
         ${calls.slice(0, 50).map((c) => `<tr><td>${esc(fmtDateTime(c.createdAt))}</td><td>${esc(c.leadName)}</td><td><span class="status s-${esc(c.status.replace(/\s/g, ""))}">${esc(c.status)}</span></td><td>${esc(c.notes)}</td></tr>`).join("")}
@@ -1220,6 +1228,32 @@ async function screenWorker(uid) {
     <section class="card"><h2>Recent searches</h2>
       ${searches.length ? `<ul class="plain">${searches.slice(0, 30).map((s) => `<li>${esc(fmtDateTime(s.createdAt))} · ${esc(s.category)} in ${esc(s.suburb)} · ${s.results} results, ${s.noWebsite} with no website</li>`).join("")}</ul>` : `<div class="empty">No searches yet.</div>`}
     </section>`;
+  view().querySelectorAll("[data-edit-deal]").forEach((b) => b.addEventListener("click", () => {
+    const call = calls.find((c) => c.id === b.dataset.editDeal);
+    showModal(`<h2>Edit deal amount</h2>
+      <p class="muted">${esc(call.leadName)} · won by ${esc(call.userName || user.name)} on ${esc(fmtDateTime(call.createdAt))}</p>
+      <form id="dealEdit" class="deal">
+        <label for="dealAmt">What they're paying</label>
+        <div class="inline"><span class="cur">$</span><input type="number" id="dealAmt" min="0" max="100000" step="1" value="${esc(String(call.value || 0))}" required></div>
+        <p class="small muted">Commission: <b id="dealComm">${esc(money(commissionFor(call.value)))}</b>. Sales totals, the leaderboard and commission all update.</p>
+        <button class="primary">Save amount</button>
+      </form>`);
+    const amt = $("#dealAmt");
+    amt.addEventListener("input", () => { $("#dealComm").textContent = money(commissionFor(amt.value)); });
+    $("#dealEdit").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const v = Number(amt.value);
+      if (!(v >= 0)) return toast("Enter an amount", "bad");
+      await busy(e.submitter || $("#dealEdit button"), "Saving", async () => {
+        try {
+          const saved = await D.editDealValue(state.me, call, v);
+          document.querySelector(".modal-wrap .wide-btn")?.click();
+          toast(`Deal updated to ${money(saved)}`);
+          screenWorker(uid);
+        } catch (err) { toast(D.authMessage(err), "bad"); }
+      });
+    });
+  }));
 }
 
 // =====================================================================

@@ -175,7 +175,13 @@ service cloud.firestore {
       }
       allow read: if isAdmin() || (isActive() && resource.data.uid == request.auth.uid);
       allow create: if isActive() && callOk();
-      allow update: if false;
+      // Admin can correct the amount on a won deal (the stats revenue is fixed in the same write)
+      allow update: if isAdmin()
+        && resource.data.status == 'Won' && ('value' in resource.data)
+        && onlyChanged(['value', 'editedBy', 'editedAt'])
+        && request.resource.data.value is number && request.resource.data.value >= 0 && request.resource.data.value <= 100000
+        && request.resource.data.editedBy == request.auth.uid
+        && request.resource.data.editedAt == request.time;
       allow delete: if isAdmin();
     }
 
@@ -219,6 +225,8 @@ service cloud.firestore {
         && d().won == resource.data.won + addsW()
         && d().get('revenue', 0) == resource.data.get('revenue', 0) + addsV()
         && pointsOk();
+      // Admin deal-amount correction: only revenue changes
+      allow update: if isAdmin() && onlyChanged(['revenue']) && d().revenue is number && d().revenue >= 0;
       allow delete: if isAdmin();
     }
 

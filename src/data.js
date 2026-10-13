@@ -278,6 +278,21 @@ export async function logCall(me, lead, status, notes, callbackAt, dealValue = 0
   return earned;
 }
 
+/** Admin: fix the amount on a won deal. Updates the call and that day's revenue together. */
+export async function editDealValue(me, call, newValue) {
+  const value = Math.max(0, Math.min(100000, Math.round(Number(newValue) || 0)));
+  const callRef = doc(db, "calls", call.id);
+  const statRef = doc(db, "stats", `${call.day}_${call.uid}`);
+  await runTransaction(db, async (tx) => {
+    const [c, st] = [await tx.get(callRef), await tx.get(statRef)];
+    const old = c.data().value || 0;
+    tx.update(callRef, { value, editedBy: me.id, editedAt: serverTimestamp() });
+    if (st.exists()) tx.update(statRef, { revenue: Math.max(0, (st.data().revenue || 0) - old + value) });
+  });
+  logEvent(me, "edit", `changed ${call.leadName} deal from $${(call.value || 0).toLocaleString("en-AU")} to $${value.toLocaleString("en-AU")}`, { callId: call.id });
+  return value;
+}
+
 // ---------- stats ----------
 export function watchStats(field, value, cb, onErr) {
   return onSnapshot(query(collection(db, "stats"), where(field, "==", value)),

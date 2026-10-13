@@ -374,3 +374,19 @@ test("care plans: workers record their own, only admin sees all and edits", asyn
   await assertFails(updateDoc(doc(as("owner"), "carePlans/c1"), { soldBy: "w2" }));
   await assertSucceeds(deleteDoc(doc(as("owner"), "carePlans/c1")));
 });
+
+test("admin can correct a won deal's amount; workers can't", async () => {
+  await assertSucceeds(logCall(as("w1"), { status: "Won", callId: "c1", value: 500 }));
+  const fix = (db, value, extra = {}) => {
+    const b = writeBatch(db);
+    b.update(doc(db, "calls/c1"), { value, editedBy: db === undefined ? "" : extra.by ?? "owner", editedAt: serverTimestamp(), ...extra.call });
+    b.update(doc(db, `stats/${TODAY}_w1`), { revenue: value, ...extra.stat });
+    return b.commit();
+  };
+  await assertFails(fix(as("w1"), 5000, { by: "w1" }));
+  await assertFails(fix(as("owner"), 800, { call: { status: "No answer" } }));
+  await assertFails(fix(as("owner"), 800, { stat: { points: 999 } }));
+  await assertSucceeds(fix(as("owner"), 800));
+  const c = await getDoc(doc(as("owner"), "calls/c1"));
+  assert1(c.data().value === 800, "amount corrected");
+});
