@@ -4,7 +4,7 @@ import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVER
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, commissionTotal, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel,
+  commissionFor, commissionTotal, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, careStats, monthsBilled,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -297,9 +297,9 @@ async function route() {
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
     home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews, chat: screenChat,
-    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand,
+    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand, care: screenCare,
   };
-  const adminOnly = ["admin", "worker", "pool", "team", "report", "brand"];
+  const adminOnly = ["admin", "worker", "pool", "team", "report", "brand", "care"];
   let fn = routes[name] || screenHome;
   if (adminOnly.includes(name) && !isAdmin()) fn = screenHome;
   markTab(adminOnly.includes(name) ? "admin" : name);
@@ -910,12 +910,27 @@ function showAfterWon(lead, value) {
       <p class="won-brand">Another ${esc(BRAND.name)} client. Send them the thank-you text from their lead card.</p>
       <p class="muted">You earned <b>${money(commissionFor(value))}</b>. Before you hang up, squeeze more out of it:</p></div>
     <div class="after-won">
-      <div><b>1. Care plan (monthly money)</b><p>${esc(AFTER_WON.upsell)}</p></div>
+      <div><b>1. Care plan (monthly money)</b><p>${esc(AFTER_WON.upsell)}</p>
+        <form class="care-quick" id="careQuick"><span class="cur">$</span><input type="number" id="careAmt" min="1" max="10000" step="1" value="${CARE_DEFAULT}" aria-label="Monthly amount"><span class="muted small">/month</span>
+          <button class="primary small">They said yes: add care plan</button></form></div>
       <div class="upsell-step"><b>2. Tap-to-review cards (${esc(NFC.price)})</b><p>${esc(NFC.pitch)}</p>
         ${isAdmin() ? `<a class="ghost small" href="#reviews/${encodeURIComponent([lead.name, lead.suburb].filter(Boolean).join(" "))}" data-close>Make their review card link →</a>` : ""}</div>
       <div><b>3. Referral (free leads)</b><p>${esc(AFTER_WON.referral)}</p></div>
       <div><b>4. Review (more trust)</b><p>${esc(AFTER_WON.review)}</p></div>
     </div>`);
+  const form = $("#careQuick");
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const monthly = Number($("#careAmt").value);
+    if (!(monthly > 0)) return toast("Enter the monthly amount", "bad");
+    await busy(e.submitter || form.querySelector("button"), "Saving", async () => {
+      try {
+        await D.addCarePlan(state.me, { client: lead.name, leadId: lead.id, monthly, startDay: perthDay() });
+        form.outerHTML = `<p class="care-done">✓ Care plan added: ${esc(money(monthly))}/month. That's ${esc(money(monthly * 12))} a year.</p>`;
+        confetti();
+      } catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+  });
 }
 
 // =====================================================================
@@ -999,14 +1014,15 @@ function screenAccount() {
 // =====================================================================
 function adminNav(active) {
   return `<div class="subnav">
-    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["team", "Team"], ["brand", "Brand kit"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
+    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["care", "Care plans"], ["team", "Team"], ["brand", "Brand kit"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
   </div>`;
 }
 
 // Admin: money on the table + best hours to call
 async function drawMoney(today, rid) {
   try {
-    const [interested, calls] = await Promise.all([D.getLeadsWithStatus("Interested"), D.getCallsSince(addDays(today, -30))]);
+    const [interested, calls, plans] = await Promise.all([D.getLeadsWithStatus("Interested"), D.getCallsSince(addDays(today, -30)), D.getCarePlans().catch(() => [])]);
+    const care = careStats(plans, today);
     if (rid !== state.routeId || !$("#moneyBox")) return;
     const wonVals = calls.filter((c) => c.status === "Won" && c.value > 0).map((c) => c.value);
     const avg = wonVals.length ? wonVals.reduce((a, b) => a + b, 0) / wonVals.length : 500;
@@ -1024,6 +1040,11 @@ async function drawMoney(today, rid) {
         ${stale.length ? `<p class="warn-line">⚠️ ${stale.length} going cold: no contact for 3+ days. ${stale.slice(0, 3).map((l) => `<b>${esc(l.name)}</b> (${esc(l.assignedName || "unassigned")})`).join(", ")}${stale.length > 3 ? "…" : ""}</p>` : ""}
         <small class="muted">Close rate (last 30 days): <b>${pct(closeRate)}</b> of answered calls</small>
       </div>
+      <a class="card care-card" href="#care">
+        <span class="muted">Care plans: monthly income</span>
+        <b class="num">${money(care.mrr)}<small>/mo</small></b>
+        <small class="muted">${care.active} active client${care.active === 1 ? "" : "s"} · ${money(care.arr)} a year${care.dueSoon.length ? ` · <b class="due-tag">${care.dueSoon.length} payment${care.dueSoon.length === 1 ? "" : "s"} due this week</b>` : ""}</small>
+      </a>
       <div class="card hours">
         <span class="muted">Best time to call</span>
         <b class="num">${best ? hourLabel(best.hour) : "—"}</b>
@@ -1402,6 +1423,84 @@ function roastFor(calls, goal, name) {
 // =====================================================================
 // Review cards: Google review links for NFC cards, plus the upsell
 // =====================================================================
+// =====================================================================
+// Care plans (admin): monthly recurring income
+// =====================================================================
+async function screenCare() {
+  setTitle("Care plans");
+  const rid = state.routeId;
+  const today = perthDay();
+  view().innerHTML = `${adminNav("care")}<h1 class="page">Care plans</h1><div id="careBody"><div class="loading"><span class="spinner"></span></div></div>`;
+  const [plans, won] = await Promise.all([D.getCarePlans(), D.getLeadsWithStatus("Won").catch(() => [])]);
+  if (rid !== state.routeId) return;
+  const leadsById = new Map(won.map((l) => [l.id, l]));
+  const st = careStats(plans, today);
+  const fmtDay = (d) => prettyDay(d);
+  const reminder = (p) => `Hi! Just a heads up, the ${money(p.monthly)} monthly care plan payment for ${p.client}'s website is due on ${fmtDay(p.due)}. Thanks for being with ${BRAND.name}!\n${signature(state.me, state.brand)}`;
+  const sorted = plans.slice().sort((a, b) => (a.status === b.status ? b.monthly - a.monthly : a.status === "active" ? -1 : 1));
+  $("#careBody").innerHTML = `
+    <section class="tiles">
+      <div class="tile care-mrr"><span>Monthly income</span><b class="num">${money(st.mrr)}</b><small>${st.newThisMonth} new this month${st.cancelledThisMonth ? ` · ${st.cancelledThisMonth} cancelled` : ""}</small></div>
+      <div class="tile"><span>Per year</span><b class="num">${money(st.arr)}</b><small>if nobody cancels</small></div>
+      <div class="tile"><span>Active clients</span><b class="num">${st.active}</b><small>${plans.length - st.active} cancelled</small></div>
+      <div class="tile"><span>Collected so far</span><b class="num">${money(st.collected)}</b><small>all care plans, all time</small></div>
+    </section>
+    <section class="card">
+      <h2>Payments due this week</h2>
+      ${st.dueSoon.length ? `<ul class="plain">${st.dueSoon.map((p, i) => {
+        const phone = cleanPhone(leadsById.get(p.leadId)?.phone || "");
+        return `<li class="due"><b>${esc(p.client)}</b><span>${esc(money(p.monthly))} · ${esc(p.due === today ? "Today" : fmtDay(p.due))}</span>
+          ${phone.valid ? `<a class="ghost small" href="sms:${esc(phone.tel.replace(/^tel:/, ""))}?&body=${encodeURIComponent(reminder(p))}">Text reminder</a>` : ""}
+          <button class="linkbtn" data-rem="${i}">Copy reminder</button></li>`;
+      }).join("")}</ul>` : `<p class="muted">Nothing due in the next 7 days.</p>`}
+    </section>
+    <form class="card" id="careForm">
+      <h2>Add a care plan</h2>
+      <div class="care-grid">
+        <div><label for="cpClient">Client</label><input id="cpClient" list="cpWon" maxlength="120" required placeholder="Business name">
+          <datalist id="cpWon">${won.map((l) => `<option value="${esc(l.name)}">`).join("")}</datalist></div>
+        <div><label for="cpAmt">Per month ($)</label><input id="cpAmt" type="number" min="1" max="10000" step="1" value="${CARE_DEFAULT}" required></div>
+        <div><label for="cpStart">Started</label><input id="cpStart" type="date" value="${today}" required></div>
+      </div>
+      <button class="primary">Add care plan</button>
+    </form>
+    <section class="card">
+      <h2>All care plans</h2>
+      ${plans.length ? `<div class="tablewrap"><table class="board">
+        <thead><tr><th>Client</th><th class="n">Per month</th><th>Since</th><th class="n">Months</th><th class="n">Collected</th><th>Sold by</th><th></th></tr></thead>
+        <tbody>${sorted.map((p) => {
+          const months = monthsBilled(p.startDay, p.status === "cancelled" && p.cancelDay ? p.cancelDay : today);
+          return `<tr class="${p.status === "cancelled" ? "cancelled" : ""}"><td><b>${esc(p.client)}</b>${p.status === "cancelled" ? ` <span class="pill taken">Cancelled ${esc(p.cancelDay ? fmtDay(p.cancelDay) : "")}</span>` : ""}</td>
+            <td class="n">${esc(money(p.monthly))}</td><td>${esc(fmtDay(p.startDay))}</td><td class="n">${months}</td><td class="n">${esc(money(months * p.monthly))}</td>
+            <td>${esc(p.soldByName || "")}</td>
+            <td class="actions">${p.status === "active" ? `<button class="linkbtn" data-cancel="${esc(p.id)}">Cancel</button>` : `<button class="linkbtn" data-react="${esc(p.id)}">Reactivate</button>`}
+              <button class="linkbtn danger" data-delp="${esc(p.id)}">Delete</button></td></tr>`;
+        }).join("")}</tbody></table></div>` : `<div class="empty">No care plans yet. Offer one on every sale. ${esc(money(CARE_DEFAULT))}/month from 20 clients is ${esc(money(CARE_DEFAULT * 20 * 12))} a year.</div>`}
+    </section>`;
+  $("#careBody").querySelectorAll("[data-rem]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(reminder(st.dueSoon[Number(b.dataset.rem)])); toast("Reminder copied"); } catch { toast("Couldn't copy", "bad"); }
+  }));
+  $("#careForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const client = $("#cpClient").value.trim();
+    const monthly = Number($("#cpAmt").value);
+    const startDay = $("#cpStart").value;
+    if (!client || !(monthly > 0) || !startDay) return toast("Fill in the client, amount and start date", "bad");
+    const lead = won.find((l) => l.name === client);
+    await busy(e.submitter || $("#careForm button"), "Saving", async () => {
+      try { await D.addCarePlan(state.me, { client, leadId: lead?.id || "", monthly, startDay }); toast(`Care plan added: ${money(monthly)}/month`); screenCare(); }
+      catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+  });
+  const act = (sel, fn, msg) => $("#careBody").querySelectorAll(sel).forEach((b) => b.addEventListener("click", async () => {
+    if (msg && !confirm(msg)) return;
+    try { await fn(Object.values(b.dataset)[0]); screenCare(); } catch (err) { toast(D.authMessage(err), "bad"); }
+  }));
+  act("[data-cancel]", (id) => D.updateCarePlan(id, { status: "cancelled", cancelDay: today }), "Mark this care plan as cancelled from today?");
+  act("[data-react]", (id) => D.updateCarePlan(id, { status: "active", cancelDay: "" }));
+  act("[data-delp]", (id) => D.deleteCarePlan(id), "Delete this care plan completely? Use Cancel instead if they just stopped paying.");
+}
+
 // =====================================================================
 // Brand kit (admin): what clients see
 // =====================================================================

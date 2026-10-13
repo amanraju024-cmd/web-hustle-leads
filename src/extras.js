@@ -211,3 +211,44 @@ export function bestHours(calls, toDateFn) {
   return { rows, best: ranked[0] || null };
 }
 export const hourLabel = (h) => `${((h + 11) % 12) + 1}${h < 12 ? "am" : "pm"}`;
+
+// =====================================================================
+// Care plans: monthly recurring income
+// =====================================================================
+export const CARE_DEFAULT = 49; // $/month suggested on the after-sale screen
+
+/** Number of billing dates from startDay up to and including today (billed on the start date each month). */
+export function monthsBilled(startDay, endDay) {
+  if (!startDay || startDay > endDay) return 0;
+  const [sy, sm, sd] = startDay.split("-").map(Number);
+  const [ey, em, ed] = endDay.split("-").map(Number);
+  let n = (ey - sy) * 12 + (em - sm) + 1;
+  const lastOfEndMonth = new Date(Date.UTC(ey, em, 0)).getUTCDate();
+  if (ed < Math.min(sd, lastOfEndMonth)) n--;
+  return Math.max(0, n);
+}
+
+/** Next billing date on or after `today` (YYYY-MM-DD), clamped to the month's last day. */
+export function nextBillDay(startDay, today) {
+  const sd = Number(startDay.slice(8, 10));
+  let [y, m] = today.split("-").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const day = `${y}-${String(m).padStart(2, "0")}-${String(Math.min(sd, last)).padStart(2, "0")}`;
+    if (day >= today && day >= startDay) return day;
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return startDay;
+}
+
+export function careStats(plans, today) {
+  const active = plans.filter((p) => p.status === "active");
+  const mrr = active.reduce((n, p) => n + p.monthly, 0);
+  const collected = plans.reduce((n, p) => n + p.monthly * monthsBilled(p.startDay, p.status === "cancelled" && p.cancelDay ? p.cancelDay : today), 0);
+  const in7 = (() => { const d = new Date(`${today}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10); })();
+  const dueSoon = active.map((p) => ({ ...p, due: nextBillDay(p.startDay, today) })).filter((p) => p.due <= in7).sort((a, b) => a.due.localeCompare(b.due));
+  const month = today.slice(0, 7);
+  return { active: active.length, mrr, arr: mrr * 12, collected, dueSoon,
+    cancelledThisMonth: plans.filter((p) => p.status === "cancelled" && (p.cancelDay || "").startsWith(month)).length,
+    newThisMonth: plans.filter((p) => p.startDay.startsWith(month)).length };
+}

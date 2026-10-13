@@ -267,6 +267,17 @@ export async function getStatsFor(uid) {
 }
 
 // ---------- live team pop-ups ----------
+// ---------- care plans ----------
+export const addCarePlan = (me, { client, leadId = "", monthly, startDay, notes = "" }) =>
+  addDoc(collection(db, "carePlans"), { client, leadId, monthly, startDay, status: "active", cancelDay: "", notes,
+    soldBy: me.id, soldByName: me.name, createdAt: serverTimestamp() });
+export const updateCarePlan = (id, data) => updateDoc(doc(db, "carePlans", id), data);
+export const deleteCarePlan = (id) => deleteDoc(doc(db, "carePlans", id));
+export async function getCarePlans() {
+  const snap = await getDocs(collection(db, "carePlans"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 // ---------- team chat ----------
 export const sendMessage = (me, text) =>
   addDoc(collection(db, "messages"), { uid: me.id, name: me.name, role: me.role, text: text.slice(0, 1000), at: serverTimestamp() });

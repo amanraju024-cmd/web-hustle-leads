@@ -320,6 +320,21 @@
   .objections { margin: 0; display: grid; gap: 8px; }
   .objections dt { font-weight: 700; }
   .objections dd { margin: 2px 0 0; color: var(--muted); }
+  /* ---------- care plans ---------- */
+  .care-quick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding: 0 !important; border: 0 !important; background: none !important; }
+  .care-quick .cur { font-weight: 800; color: var(--gold); }
+  .care-quick input { width: 90px; font-family: var(--mono); font-weight: 700; }
+  .care-done { color: var(--good) !important; font-weight: 700; }
+  .care-card { text-decoration: none; color: inherit; border-color: rgba(95,224,160,.3); }
+  .care-card b.num { color: var(--good); }
+  .care-card b.num small { font-size: 16px; color: var(--muted); margin-left: 2px; }
+  .due-tag { color: var(--warn); }
+  .care-mrr b.num { color: var(--good); }
+  .care-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  @media (max-width: 640px) { .care-grid { grid-template-columns: 1fr 1fr; } .care-grid > div:first-child { grid-column: 1 / -1; } }
+  tr.cancelled td { opacity: .55; }
+  td.actions { white-space: nowrap; }
+  .linkbtn.danger { color: var(--bad); }
   /* ---------- team chat ---------- */
   .tabs a { position: relative; }
   .tab-badge { font-style: normal; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #ff5c52; color: #fff; font-size: 11px; font-weight: 800; display: inline-grid; place-items: center; margin-left: 6px; }

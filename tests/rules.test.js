@@ -301,3 +301,19 @@ test("team chat: post as yourself only, no editing, admin can delete", async () 
   await assertSucceeds(deleteDoc(doc(as("owner"), "messages/m1")));
   await assertSucceeds(getDocs(msgs("w1")));
 });
+
+test("care plans: workers record their own, only admin sees all and edits", async () => {
+  const plan = (o = {}) => ({ client: "Fade Factory", leadId: "sam1", monthly: 49, startDay: "2026-10-13", status: "active", cancelDay: "", notes: "", soldBy: "w1", soldByName: "Sam", createdAt: serverTimestamp(), ...o });
+  await assertSucceeds(setDoc(doc(as("w1"), "carePlans/c1"), plan()));
+  await assertFails(setDoc(doc(as("w1"), "carePlans/c2"), plan({ soldBy: "w2", soldByName: "Jo" })));
+  await assertFails(setDoc(doc(as("w1"), "carePlans/c3"), plan({ monthly: 0 })));
+  await assertFails(setDoc(doc(as("w1"), "carePlans/c4"), plan({ status: "cancelled" })));
+  await assertFails(setDoc(doc(as("w1"), "carePlans/c5"), plan({ startDay: "tomorrow" })));
+  await assertSucceeds(getDoc(doc(as("w1"), "carePlans/c1")));
+  await assertFails(getDocs(collection(as("w2"), "carePlans")));
+  await assertSucceeds(getDocs(collection(as("owner"), "carePlans")));
+  await assertFails(updateDoc(doc(as("w1"), "carePlans/c1"), { monthly: 1 }));
+  await assertSucceeds(updateDoc(doc(as("owner"), "carePlans/c1"), { status: "cancelled", cancelDay: "2026-11-01" }));
+  await assertFails(updateDoc(doc(as("owner"), "carePlans/c1"), { soldBy: "w2" }));
+  await assertSucceeds(deleteDoc(doc(as("owner"), "carePlans/c1")));
+});

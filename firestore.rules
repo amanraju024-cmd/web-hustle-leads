@@ -200,6 +200,28 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isAdmin();
     }
+    // Care plans (monthly income): anyone active can record one they sold; only admin sees all and manages them
+    match /carePlans/{id} {
+      function validPlan(d) {
+        return d.client is string && d.client.size() >= 1 && d.client.size() <= 120
+          && d.monthly is number && d.monthly > 0 && d.monthly <= 10000
+          && d.startDay is string && d.startDay.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && d.status in ['active', 'cancelled']
+          && shortString(d.notes, 500);
+      }
+      allow read: if isAdmin() || (isActive() && resource.data.soldBy == request.auth.uid);
+      allow create: if isActive()
+        && request.resource.data.keys().hasOnly(['client', 'leadId', 'monthly', 'startDay', 'status', 'cancelDay', 'notes', 'soldBy', 'soldByName', 'createdAt'])
+        && validPlan(request.resource.data)
+        && request.resource.data.status == 'active'
+        && request.resource.data.soldBy == request.auth.uid
+        && request.resource.data.soldByName == profile().name
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['client', 'monthly', 'startDay', 'status', 'cancelDay', 'notes'])
+        && validPlan(request.resource.data);
+      allow delete: if isAdmin();
+    }
     // Team chat: everyone active reads and posts as themselves (name/role must match their profile); admin can delete
     match /messages/{id} {
       allow read: if isActive();
