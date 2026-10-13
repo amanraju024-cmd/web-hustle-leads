@@ -320,6 +320,33 @@
   .objections { margin: 0; display: grid; gap: 8px; }
   .objections dt { font-weight: 700; }
   .objections dd { margin: 2px 0 0; color: var(--muted); }
+  /* ---------- lead score, call mode, follow-ups, money ---------- */
+  .score { font: 700 11px/1 var(--mono); padding: 4px 7px; border-radius: 999px; color: var(--muted); border: 1px solid var(--border-strong); vertical-align: 2px; }
+  .score.hot { color: #ffb36b; border-color: rgba(255,140,60,.5); background: rgba(255,120,40,.12); }
+  .callmode-start { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px; margin-bottom: 14px; font-size: 17px; }
+  .callmode-start span { font-size: 12px; font-weight: 600; opacity: .75; }
+  .callmode-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .callmode-bar > div:first-child { display: grid; }
+  .callmode-bar .toolbar { margin: 0; }
+  .callmode-progress { height: 6px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; margin: 10px 0 14px; }
+  .callmode-progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), #5fe0a0); transition: width .4s; }
+  .callmode .lead { border-color: rgba(226,185,104,.45); }
+  .callmode .phone, .callmode a[href^="tel:"] { font-size: 20px; padding: 12px 18px; }
+  .callmode-done { text-align: center; padding: 36px 20px; }
+  .callmode-done > span { font-size: 44px; }
+  .followups { border-color: rgba(255,140,60,.35); }
+  .followups h2 .small { display: block; font-weight: 500; margin-top: 2px; }
+  .money-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 16px; }
+  .money-grid .card { display: grid; gap: 4px; align-content: start; margin: 0; }
+  .money-grid b.num { font: 800 36px/1.1 var(--sans); letter-spacing: -.04em; }
+  .pipeline b.num { color: var(--good); }
+  .hours b.num { color: var(--gold); }
+  .warn-line { margin: 6px 0; font-size: 13px; color: var(--warn); }
+  .hour-bars { display: flex; align-items: flex-end; gap: 4px; height: 90px; margin-top: 10px; }
+  .hb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+  .hb span { width: 100%; border-radius: 4px 4px 0 0; background: rgba(255,255,255,.14); }
+  .hb.best span { background: linear-gradient(180deg, #f3d48f, var(--gold)); }
+  .hb small { font-size: 10px; color: var(--muted); }
   /* ---------- AR Methods / Aman Raju branding ---------- */
   .founder { display: grid; justify-items: center; gap: 2px; margin: 14px auto 18px; padding: 12px 18px; border-radius: 16px; max-width: 260px;
     background: linear-gradient(180deg, rgba(226,185,104,.12), rgba(226,185,104,.03)); border: 1px solid rgba(226,185,104,.3); }

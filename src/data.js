@@ -320,6 +320,14 @@ export async function getAllCalls() {
   const snap = await getDocs(query(collection(db, "calls"), orderBy("createdAt", "desc"), limit(5000)));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
+export async function getCallsSince(day) {
+  const snap = await getDocs(query(collection(db, "calls"), where("day", ">=", day)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+export async function getLeadsWithStatus(status) {
+  const snap = await getDocs(query(collection(db, "leads"), where("status", "==", status)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
 export function watchSearchesForDay(day, cb, onErr) {
   return onSnapshot(query(collection(db, "searches"), where("day", "==", day)), (snap) => cb(snap.docs.map((d) => d.data())), onErr);
 }

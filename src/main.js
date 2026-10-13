@@ -4,7 +4,7 @@ import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVER
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, commissionTotal, NFC, BRAND, signature, textsFor, creditHtml,
+  commissionFor, commissionTotal, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -359,7 +359,8 @@ D.onAuthStateChanged(D.auth, async (user) => {
 // =====================================================================
 // Home
 // =====================================================================
-const slimLead = (l) => ({ id: l.id, name: l.name, phone: l.phone, status: l.status, callbackAt: toDate(l.callbackAt)?.getTime() ?? null });
+const slimLead = (l) => ({ id: l.id, name: l.name, phone: l.phone, status: l.status, suburb: l.suburb || "",
+  callbackAt: toDate(l.callbackAt)?.getTime() ?? null, lastCalledAt: toDate(l.lastCalledAt)?.getTime() ?? null });
 const slimCall = (c) => ({ status: c.status, value: c.value || 0, day: c.day });
 
 async function screenHome() {
@@ -373,14 +374,15 @@ async function screenHome() {
   const HOME_KEY = `arm_home_${state.me.id}`;
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(HOME_KEY) || "null"); } catch {}
-  const revive = (l) => ({ ...l, callbackAt: l.callbackAt ? D.Timestamp.fromMillis(l.callbackAt) : null });
+  const revive = (l) => ({ ...l, callbackAt: l.callbackAt ? D.Timestamp.fromMillis(l.callbackAt) : null, lastCalledAt: l.lastCalledAt ? D.Timestamp.fromMillis(l.lastCalledAt) : null });
   const load = Promise.all([D.getStatsFor(state.me.id), D.getLeadsFor(state.me.id), D.getCallsFor(state.me.id).catch(() => [])]);
   let mine, leads, myCalls;
   if (cached && cached.day === today) {
     [mine, leads, myCalls] = [cached.mine, cached.leads.map(revive), cached.calls];
     load.then(([m, l, c]) => {
       if (rid !== state.routeId) return;
-      const same = JSON.stringify([m.length, l.length, c.length]) === JSON.stringify([mine.length, leads.length, myCalls.length]);
+      const sig = (ls, cs, ms) => JSON.stringify([ms.length, cs.length, ls.map((x) => [x.id, x.status, toDate(x.callbackAt)?.getTime() ?? null])]);
+      const same = sig(l, c, m) === sig(leads, myCalls, mine);
       try { localStorage.setItem(HOME_KEY, JSON.stringify({ day: today, mine: m, leads: l.map(slimLead), calls: c.map(slimCall) })); } catch {}
       if (!same) screenHome();
     }).catch(() => {});
@@ -404,6 +406,9 @@ async function screenHome() {
     const due = leads.filter((l) => l.status === "Call back" && toDate(l.callbackAt) && toDate(l.callbackAt) < endOfToday)
       .sort((a, b) => toDate(a.callbackAt) - toDate(b.callbackAt));
     const fresh = leads.filter((l) => l.status === "New").length;
+    const staleBefore = Date.now() - 3 * 864e5;
+    const followUps = leads.filter((l) => l.status === "Interested" && (toDate(l.lastCalledAt)?.getTime() ?? 0) < staleBefore)
+      .sort((a, b) => (toDate(a.lastCalledAt)?.getTime() ?? 0) - (toDate(b.lastCalledAt)?.getTime() ?? 0));
     $("#homeBody").innerHTML = `
       <section class="goal card">
         <div class="goal-head"><span>Today's calls</span><b class="num">${t.calls} / ${state.goal}</b></div>
@@ -425,6 +430,16 @@ async function screenHome() {
             ${l.phone ? phoneHtml(l.phone) : ""}
           </li>`).join("")}</ul>` : `<p class="muted">Nothing due today.</p>`}
       </section>
+      ${followUps.length ? `<section class="card followups">
+        <h2>🔥 Follow-ups due <span class="muted small">Interested, but no contact for 3+ days</span></h2>
+        <ul class="plain">${followUps.map((l, i) => {
+          const last = toDate(l.lastCalledAt);
+          const days = last ? Math.floor((Date.now() - last.getTime()) / 864e5) : null;
+          return `<li class="due"><a href="#leads">${esc(l.name)}</a><span>${days != null ? `${days} days ago` : "Never called"}</span>
+            ${l.phone ? phoneHtml(l.phone) : ""}<button class="linkbtn" data-fu="${i}">💬 Text</button></li>`;
+        }).join("")}</ul>
+        <p class="muted small">Warm leads go cold fast. A quick follow-up text wins deals.</p>
+      </section>` : ""}
       <section class="card earn">
         <div><span class="muted">Your commission this month</span><b class="num">${money(earnedMonth)}</b>
           <small class="muted">${monthWon.length} deal${monthWon.length === 1 ? "" : "s"} closed · $100 per site of $500+, 10% under $500</small></div>
@@ -442,6 +457,7 @@ async function screenHome() {
         <a class="ghost" href="#leads">My leads (${fresh} new)</a>
       </section>
       <p class="muted small">Points: each call 1 · Interested +3 · Won +10</p>`;
+    $("#homeBody").querySelectorAll("[data-fu]").forEach((b) => b.addEventListener("click", () => showTexts(followUps[Number(b.dataset.fu)])));
   };
   state.unsub.push(D.watchStats("day", today, draw, (e) => { $("#homeBody").innerHTML = errorBox(D.authMessage(e)); }));
 }
@@ -523,7 +539,7 @@ function drawResults() {
   if (!r || !$("#results")) return;
   const c = countKinds(r.leads);
   const shown = (state.filter === "all" ? r.leads : r.leads.filter((l) => l.websiteKind === state.filter))
-    .slice().sort((a, b) => (a.websiteKind === b.websiteKind ? (a.maybeSite ? 1 : 0) - (b.maybeSite ? 1 : 0) : 0));
+    .slice().sort((a, b) => (a.websiteKind === b.websiteKind ? leadScore(b) - leadScore(a) : 0));
   const maybeCount = r.leads.filter((l) => l.maybeSite).length;
   const sources = r.source === "google"
     ? [`Google Maps${r.cached ? " (saved search, no usage)" : r.googleRequests ? ` (${r.googleRequests} request${r.googleRequests === 1 ? "" : "s"})` : ""}`]
@@ -566,7 +582,7 @@ function resultCard(l) {
   return `
     <article class="lead">
       <div class="lead-main">
-        <h3>${esc(l.name)} <span class="badge ${l.websiteKind}">${KIND_LABEL[l.websiteKind]}</span></h3>
+        <h3>${esc(l.name)} ${scoreChip(l)} <span class="badge ${l.websiteKind}">${KIND_LABEL[l.websiteKind]}</span></h3>
         <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}${l.rating ? ` · ★ ${Number(l.rating).toFixed(1)} (${Number(l.reviews) || 0})` : ""}</p>
         <p class="row">${phoneHtml(l.phone)} ${leadLinks(l)}</p>
         ${siteHint(l)}
@@ -597,6 +613,7 @@ async function doClaim(btn) {
 // =====================================================================
 function screenLeads() {
   setTitle("My leads");
+  state.callMode = false;
   view().innerHTML = `<h1 class="page">My leads</h1><div id="leadsBody"><div class="loading"><span class="spinner"></span></div></div>`;
   state.unsub.push(D.watchMyLeads(state.me.id, (leads) => { state.myLeads = leads; drawMyLeads(); },
     (e) => { $("#leadsBody").innerHTML = errorBox(D.authMessage(e)); }));
@@ -609,6 +626,24 @@ function drawMyLeads() {
   if (body.contains(document.activeElement) && document.activeElement.matches("textarea, input")) return;
   const now = new Date();
   const leads = state.myLeads;
+  if (state.callMode) {
+    const queue = callQueue(leads);
+    const handled = state.callDone?.size || 0;
+    if (!queue.length) {
+      body.innerHTML = `<section class="card callmode-done"><span aria-hidden="true">🏁</span><h2>Queue cleared</h2>
+        <p class="muted">${handled} lead${handled === 1 ? "" : "s"} handled. Find more leads to keep going.</p>
+        <div class="toolbar"><a class="primary" href="#find">Find new leads</a><button class="ghost" data-exit>Back to my leads</button></div></section>`;
+    } else {
+      body.innerHTML = `<div class="callmode-bar"><div><b>📞 Call mode</b><span class="muted small">${handled} done · ${queue.length} to go</span></div>
+          <div class="toolbar"><button class="ghost small" data-skip>Skip</button><button class="ghost small" data-exit>Exit</button></div></div>
+        <div class="callmode-progress"><span style="width:${Math.round((handled / (handled + queue.length)) * 100)}%"></span></div>
+        <div class="list callmode">${myLeadCard(queue[0], now)}</div>`;
+      body.querySelectorAll("article[data-id]").forEach(wireLeadCard);
+      body.querySelector("[data-skip]").addEventListener("click", () => { state.callDone.add(queue[0].id); drawMyLeads(); });
+    }
+    body.querySelectorAll("[data-exit]").forEach((b) => b.addEventListener("click", () => { state.callMode = false; drawMyLeads(); }));
+    return;
+  }
   const groups = {
     active: (l) => !["Not interested", "Won"].includes(l.status),
     New: (l) => l.status === "New", "Call back": (l) => l.status === "Call back", Interested: (l) => l.status === "Interested",
@@ -621,14 +656,18 @@ function drawMyLeads() {
     if (ad && bd) return ad - bd;
     if (ad) return -1;
     if (bd) return 1;
+    if (a.status === "New" && b.status === "New") return leadScore(b) - leadScore(a);
     return (toDate(b.updatedAt) || 0) - (toDate(a.updatedAt) || 0);
   });
+  const queueSize = callQueue(leads).length;
   body.innerHTML = `
+    ${queueSize ? `<button class="primary callmode-start" data-callmode>📞 Start call mode <span>${queueSize} to call, hottest first</span></button>` : ""}
     <div class="chips">${Object.keys(groups).map((k) =>
       `<button class="chip ${state.leadFilter === k ? "on" : ""}" data-lf="${esc(k)}">${esc(label[k] || k)} (${leads.filter(groups[k]).length})</button>`).join("")}</div>
     <div class="list">${shown.length ? shown.map((l) => myLeadCard(l, now)).join("")
       : `<div class="empty">${leads.length ? "No leads in this group." : `No leads yet. <a href="#find">Find and claim some</a>.`}</div>`}</div>`;
   body.querySelectorAll("[data-lf]").forEach((b) => b.addEventListener("click", () => { state.leadFilter = b.dataset.lf; drawMyLeads(); }));
+  body.querySelector("[data-callmode]")?.addEventListener("click", () => { state.callMode = true; state.callDone = new Set(); window.scrollTo(0, 0); drawMyLeads(); });
   body.querySelectorAll("article[data-id]").forEach(wireLeadCard);
 }
 
@@ -640,12 +679,29 @@ function toLocalInput(ts) {
 }
 function fromLocalInput(v) { return v ? D.Timestamp.fromDate(new Date(v + ":00+08:00")) : null; }
 
+function scoreChip(l) {
+  const sc = leadScore(l);
+  return sc ? `<span class="score ${isHot(sc) ? "hot" : ""}" title="Lead score: busy, well-reviewed businesses with no website score highest">${isHot(sc) ? "🔥 " : ""}${sc}</span>` : "";
+}
+
+// Call mode: one lead at a time, next one comes up as soon as you log the call
+function callQueue(leads) {
+  const now = new Date();
+  const today = perthDay();
+  const done = state.callDone || new Set();
+  const due = (l) => l.status === "Call back" && toDate(l.callbackAt) && toDate(l.callbackAt) <= now;
+  const calledToday = (l) => l.lastCalledAt && perthDay(toDate(l.lastCalledAt)) === today;
+  const rank = (l) => (due(l) ? 0 : l.status === "New" ? 1 : 2);
+  return leads.filter((l) => !done.has(l.id) && l.phone && (due(l) || l.status === "New" || (l.status === "No answer" && !calledToday(l))))
+    .sort((a, b) => rank(a) - rank(b) || leadScore(b) - leadScore(a));
+}
+
 function myLeadCard(l, now) {
   const due = l.status === "Call back" && toDate(l.callbackAt);
   return `
     <article class="lead mylead ${due && due < now ? "overdue" : ""}" data-id="${esc(l.id)}">
       <div class="lead-main">
-        <h3>${esc(l.name)} <span class="badge ${esc(l.websiteKind)}">${KIND_LABEL[l.websiteKind] || ""}</span> <span class="status s-${esc(l.status.replace(/\s/g, ""))}">${esc(l.status)}</span></h3>
+        <h3>${esc(l.name)} ${scoreChip(l)} <span class="badge ${esc(l.websiteKind)}">${KIND_LABEL[l.websiteKind] || ""}</span> <span class="status s-${esc(l.status.replace(/\s/g, ""))}">${esc(l.status)}</span></h3>
         <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}${l.lastCalledAt ? " · last called " + esc(fmtDateTime(l.lastCalledAt)) : ""}</p>
         ${due ? `<p class="due-line">Call back ${esc(fmtDateTime(l.callbackAt))}</p>` : ""}
         <p class="row">${phoneHtml(l.phone)} <button class="linkbtn" data-texts>💬 Texts</button> ${leadLinks(l)}</p>
@@ -688,7 +744,7 @@ function showTexts(lead) {
   showModal(`<h2>Text ${esc(lead.name)}</h2>
     <p class="muted small">Every text is signed ${esc(BRAND.name)}, so they know who you are.</p>
     <div class="texts">${texts.map((t, i) => `<div class="text-tpl"><b>${esc(t.label)}</b><p>${esc(t.text).replace(/\n/g, "<br>")}</p>
-      <div class="toolbar">${phone.valid ? `<a class="primary small" href="sms:${esc(phone.tel)}?&body=${encodeURIComponent(t.text)}">Send</a>` : ""}<button class="ghost small" data-copy-text="${i}">Copy</button></div></div>`).join("")}</div>`);
+      <div class="toolbar">${phone.valid ? `<a class="primary small" href="sms:${esc(phone.tel.replace(/^tel:/, ""))}?&body=${encodeURIComponent(t.text)}">Send</a>` : ""}<button class="ghost small" data-copy-text="${i}">Copy</button></div></div>`).join("")}</div>`);
   document.querySelectorAll("[data-copy-text]").forEach((b) => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(texts[Number(b.dataset.copyText)].text); toast("Text copied"); }
     catch { toast("Couldn't copy", "bad"); }
@@ -725,6 +781,7 @@ function wireLeadCard(card) {
       try {
         const value = status === "Won" ? Number(dealInput.value) : 0;
         await D.logCall(state.me, lead, status, notes.value, status === "Call back" ? fromLocalInput(cbInput.value) : null, value);
+        if (state.callMode) state.callDone?.add(lead.id);
         document.activeElement?.blur();
         toast(status === "Won" ? `WON ${money(value)}. You earned ${money(commissionFor(value))}.` : `Logged: ${status} (+${D.pointsFor(status)} pt${D.pointsFor(status) === 1 ? "" : "s"})`);
         if (status === "Won" || status === "Interested") confetti();
@@ -841,6 +898,38 @@ function adminNav(active) {
   </div>`;
 }
 
+// Admin: money on the table + best hours to call
+async function drawMoney(today, rid) {
+  try {
+    const [interested, calls] = await Promise.all([D.getLeadsWithStatus("Interested"), D.getCallsSince(addDays(today, -30))]);
+    if (rid !== state.routeId || !$("#moneyBox")) return;
+    const wonVals = calls.filter((c) => c.status === "Won" && c.value > 0).map((c) => c.value);
+    const avg = wonVals.length ? wonVals.reduce((a, b) => a + b, 0) / wonVals.length : 500;
+    const answered = calls.filter((c) => c.status !== "No answer");
+    const closeRate = answered.length ? calls.filter((c) => c.status === "Won").length / answered.length : 0;
+    const { rows, best } = bestHours(calls, toDate);
+    const work = rows.filter((r) => r.hour >= 7 && r.hour <= 20);
+    const max = Math.max(1, ...work.map((r) => r.rate));
+    const stale = interested.filter((l) => (toDate(l.lastCalledAt)?.getTime() ?? 0) < Date.now() - 3 * 864e5);
+    $("#moneyBox").innerHTML = `<section class="money-grid">
+      <div class="card pipeline">
+        <span class="muted">Money on the table</span>
+        <b class="num">${money(interested.length * avg)}</b>
+        <small class="muted">${interested.length} interested lead${interested.length === 1 ? "" : "s"} × ${money(avg)} average deal${wonVals.length ? "" : " (default until you close some)"}</small>
+        ${stale.length ? `<p class="warn-line">⚠️ ${stale.length} going cold: no contact for 3+ days. ${stale.slice(0, 3).map((l) => `<b>${esc(l.name)}</b> (${esc(l.assignedName || "unassigned")})`).join(", ")}${stale.length > 3 ? "…" : ""}</p>` : ""}
+        <small class="muted">Close rate (last 30 days): <b>${pct(closeRate)}</b> of answered calls</small>
+      </div>
+      <div class="card hours">
+        <span class="muted">Best time to call</span>
+        <b class="num">${best ? hourLabel(best.hour) : "—"}</b>
+        <small class="muted">${best ? `${pct(best.rate)} of calls get answered at ${hourLabel(best.hour)} (last 30 days)` : "Shows up once your team has logged more calls"}</small>
+        ${work.length ? `<div class="hour-bars">${work.map((r) => `<div class="hb ${best && r.hour === best.hour ? "best" : ""}" title="${hourLabel(r.hour)}: ${r.answered}/${r.calls} answered">
+          <span style="height:${Math.max(6, Math.round((r.rate / max) * 100))}%"></span><small>${hourLabel(r.hour).replace(/(am|pm)/, "")}</small></div>`).join("")}</div>` : ""}
+      </div>
+    </section>`;
+  } catch (e) { console.warn("money box", e); }
+}
+
 async function screenAdmin() {
   setTitle("Admin");
   const today = perthDay();
@@ -854,6 +943,7 @@ async function screenAdmin() {
     <h1 class="page">Team performance</h1>
     ${new Date(`${today}T12:00:00+08:00`).getUTCDay() === 1 ? `<div class="notice info">📊 Last week's report is ready. <a href="#report">View it</a></div>` : ""}
     <div id="kpis"></div>
+    <div id="moneyBox"></div>
     <section class="card"><h2>Workers</h2><div id="workerTable"></div></section>
     <section class="card">
       <div class="feed-head"><h2>Activity</h2>
@@ -868,6 +958,7 @@ async function screenAdmin() {
       <div class="toolbar"><button class="ghost" data-export="leads">Leads CSV</button><button class="ghost" data-export="calls">Calls CSV</button><button class="ghost" data-export="searches">Searches CSV</button></div>
     </section>`;
 
+  drawMoney(today, rid);
   let todayEvents = [];
   let googleToday = 0;
   let monthRevenue = 0;
@@ -1372,7 +1463,7 @@ async function screenReviews(arg) {
       const body = encodeURIComponent(NFC.text(l.name, state.me, state.brand));
       return `<div class="rev-client"><div><b>${esc(l.name)}</b><span class="muted small">${esc(l.phone || "")}</span></div>
         <div class="toolbar">
-          ${phone.valid ? `<a class="primary small" href="sms:${esc(phone.tel)}?&body=${body}">Text them</a>` : ""}
+          ${phone.valid ? `<a class="primary small" href="sms:${esc(phone.tel.replace(/^tel:/, ""))}?&body=${body}">Text them</a>` : ""}
           <button class="ghost small" data-copy="${i}">Copy text</button>
           <a class="ghost small" href="#reviews/${encodeURIComponent([l.name, l.suburb].filter(Boolean).join(" "))}">Make link</a>
         </div></div>`;

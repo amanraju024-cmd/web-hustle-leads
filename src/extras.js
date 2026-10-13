@@ -174,3 +174,40 @@ export const commissionFor = (value) => {
   return v >= 500 ? 100 : Math.round(v * 10) / 100;
 };
 export const commissionTotal = (calls) => calls.filter((c) => c.status === "Won").reduce((n, c) => n + commissionFor(c.value), 0);
+
+// =====================================================================
+// Lead score: busy, well-reviewed businesses with no website are the most likely to pay
+// =====================================================================
+export function leadScore(l) {
+  if (!l.phone) return 0;
+  let s = 40;
+  const reviews = Number(l.reviews) || 0;
+  s += Math.min(30, Math.round(Math.log10(reviews + 1) * 15)); // 10 reviews ≈ +15, 100 ≈ +30
+  if (l.rating != null) s += l.rating >= 4.5 ? 10 : l.rating >= 4 ? 6 : l.rating >= 3.5 ? 2 : -5;
+  s += l.websiteKind === "none" ? 20 : l.websiteKind === "social" ? 12 : 0;
+  if (l.maybeSite) s -= 15;
+  return Math.max(1, Math.min(99, s));
+}
+export const isHot = (score) => score >= 75;
+
+// =====================================================================
+// Best hours to call (Perth time), from logged calls
+// =====================================================================
+const perthHour = (d) => Number(new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Perth", hour: "numeric", hour12: false }).format(d)) % 24;
+export function bestHours(calls, toDateFn) {
+  const hours = new Map();
+  for (const c of calls) {
+    const d = toDateFn(c.createdAt);
+    if (!d) continue;
+    const h = perthHour(d);
+    const row = hours.get(h) || { hour: h, calls: 0, answered: 0, won: 0 };
+    row.calls++;
+    if (c.status !== "No answer") row.answered++;
+    if (c.status === "Won" || c.status === "Interested") row.won++;
+    hours.set(h, row);
+  }
+  const rows = [...hours.values()].sort((a, b) => a.hour - b.hour).map((r) => ({ ...r, rate: r.calls ? r.answered / r.calls : 0 }));
+  const ranked = rows.filter((r) => r.calls >= 5).sort((a, b) => b.rate - a.rate);
+  return { rows, best: ranked[0] || null };
+}
+export const hourLabel = (h) => `${((h + 11) % 12) + 1}${h < 12 ? "am" : "pm"}`;
