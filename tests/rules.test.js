@@ -280,3 +280,10 @@ test("celebrations: post your own, everyone active sees them", async () => {
 });
 
 function assert1(cond, msg) { if (!cond) throw new Error("Assertion failed: " + msg); }
+
+test("brand link and phone: admin only, sensible lengths", async () => {
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, brandLink: "https://instagram.com/armethods", brandPhone: "0400 000 000" }));
+  await assertFails(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, brandLink: "x".repeat(201) }));
+  await assertFails(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, brandPhone: 400 }));
+  await assertFails(setDoc(doc(as("w1"), "settings/team"), { dailyGoal: 30, brandLink: "https://evil.example" }));
+});

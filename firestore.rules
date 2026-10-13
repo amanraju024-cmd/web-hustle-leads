@@ -57,7 +57,9 @@ service cloud.firestore {
         && request.resource.data.dailyGoal >= 1
         && request.resource.data.dailyGoal <= 500
         && (!('commissionPct' in request.resource.data)
-            || (request.resource.data.commissionPct is number && request.resource.data.commissionPct >= 0 && request.resource.data.commissionPct <= 100));
+            || (request.resource.data.commissionPct is number && request.resource.data.commissionPct >= 0 && request.resource.data.commissionPct <= 100))
+        && (!('brandLink' in request.resource.data) || (request.resource.data.brandLink is string && request.resource.data.brandLink.size() <= 200))
+        && (!('brandPhone' in request.resource.data) || (request.resource.data.brandPhone is string && request.resource.data.brandPhone.size() <= 30));
     }
     // Google Maps data connection (Apify token): only signed-in team members can read it
     match /settings/integrations {

@@ -55,13 +55,42 @@ export const OBJECTIONS = [
   ["“We already have someone.”", "No worries. If they ever drop the ball, keep my number. Want me to send a free mockup anyway so you've got something to compare?"],
 ];
 
+// =====================================================================
+// Branding on everything clients see
+// =====================================================================
+export const BRAND = { name: "AR Methods", ceo: "Aman Raju", tagline: "Perth web design" };
+
+/** Sign-off for texts: "— Sam, AR Methods (Perth web design) · link · phone" */
+export function signature(me, brand = {}) {
+  const first = (me?.name || "").split(" ")[0] || BRAND.ceo.split(" ")[0];
+  const extras = [brand.brandLink, brand.brandPhone].filter(Boolean).join(" · ");
+  return `— ${first}, ${BRAND.name} (${BRAND.tagline})${extras ? "\n" + extras : ""}`;
+}
+
+/** Ready-to-send texts for a lead, all signed AR Methods. */
+export function textsFor(lead, me, brand) {
+  const sig = signature(me, brand);
+  return [
+    { id: "mockup", label: "Mockup ready", text: `Hi! Your free website mockup for ${lead.name} is ready. Can I send you the link to have a look? No cost, no obligation.\n${sig}` },
+    { id: "missed", label: "Missed call", text: `Hi, I just tried calling ${lead.name}. I build websites for local Perth businesses and I'd love to make you a free mockup. Is now a bad time? Happy to call back whenever suits.\n${sig}` },
+    { id: "followup", label: "Follow up", text: `Hi, just following up on the website for ${lead.name}. Did you get a chance to look at the mockup? Keen to hear what you think.\n${sig}` },
+    { id: "thanks", label: "Thanks (after a sale)", text: `Thanks for choosing ${BRAND.name} for ${lead.name}'s website! We'll be in touch with the next steps soon. If you know anyone else who needs a site, send them our way.\n${sig}` },
+  ];
+}
+
+/** HTML credit for the footer of every client site. */
+export function creditHtml(brand = {}) {
+  const name = brand.brandLink ? `<a href="${brand.brandLink.replace(/"/g, "&quot;")}" style="color:inherit;font-weight:600" target="_blank" rel="noopener">${BRAND.name}</a>` : `<b>${BRAND.name}</b>`;
+  return `<p style="text-align:center;font-size:13px;opacity:.75;margin:16px 0">Website by ${name} · ${BRAND.tagline}</p>`;
+}
+
 // NFC review cards: tap a phone on the card and the business's Google review page opens
 export const NFC = {
   price: "$49 for 2 cards",
   pitch: "One more thing: most of our clients grab a couple of tap-to-review cards for the counter. Your customer taps their phone on the card and your Google review page pops up, so getting reviews takes them five seconds. It's $49 for two. Want me to add them?",
   bundle: "If it helps, I can do the website plus two tap-to-review cards for $549. The cards get you Google reviews from day one.",
   objection: ["“Do people actually use them?”", "Asking for a review is awkward, so most businesses never do it. With the card on the counter you just say “tap here if you were happy” and it opens straight to the review page. More reviews means you show up higher on Google."],
-  text: (name, first) => `Hi, it's ${first} from AR Methods. Quick one: we've started doing tap-to-review cards for ${name}. Customers tap their phone on the card at the counter and it opens your Google review page, so you get way more reviews. $49 for two, and I'll set them up for you. Keen?`,
+  text: (name, me, brand) => `Hi, quick one: we've started doing tap-to-review cards for ${name}. Customers tap their phone on the card at the counter and it opens your Google review page, so you get way more reviews. $49 for two, and I'll set them up for you. Keen?\n${signature(me, brand)}`,
 };
 
 export const AFTER_WON = {

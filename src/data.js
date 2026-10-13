@@ -84,7 +84,12 @@ export const updateUser = (uid, fields) => updateDoc(doc(db, "users", uid), { ..
 export async function getTeamSettings() {
   const snap = await getDoc(doc(db, "settings", "team"));
   const d = snap.exists() ? snap.data() : {};
-  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10 };
+  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10, brandLink: d.brandLink || "", brandPhone: d.brandPhone || "" };
+}
+/** Brand details clients see (link + phone in texts and the website credit). Keeps the daily goal as is. */
+export async function saveBrand({ brandLink, brandPhone }) {
+  const { dailyGoal } = await getTeamSettings();
+  return setDoc(doc(db, "settings", "team"), { dailyGoal, brandLink, brandPhone }, { merge: true });
 }
 export const getDailyGoal = async () => (await getTeamSettings()).dailyGoal;
 export const saveTeamSettings = (dailyGoal) => setDoc(doc(db, "settings", "team"), { dailyGoal }, { merge: true });

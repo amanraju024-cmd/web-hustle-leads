@@ -4,7 +4,7 @@ import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVER
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, commissionTotal, NFC,
+  commissionFor, commissionTotal, NFC, BRAND, signature, textsFor, creditHtml,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -123,6 +123,7 @@ function renderShell() {
       <a class="brand" href="#home">
         <img src="logo.png" alt="" width="28" height="36">
         <span><b>AR METHODS</b><small>WEBSITES • SYSTEMS • GROWTH</small></span>
+        <em class="by-ceo">by ${esc(BRAND.ceo)}</em>
       </a>
       <div class="who">
         <span class="who-name">${esc(state.me.name)}${admin ? ' <em class="role">Admin</em>' : ""}</span>
@@ -133,7 +134,7 @@ function renderShell() {
       ${tabs.map(([id, label, icon]) => `<a href="#${id}" data-tab="${id}" class="${id === "lockin" ? "lockin-tab" : ""}"><span aria-hidden="true">${icon}</span>${label}</a>`).join("")}
     </nav>
     <main id="view" tabindex="-1"></main>
-    <footer class="foot">Made by <b>AR Methods</b> · CEO <b>Aman Raju</b></footer>`;
+    <footer class="foot sig"><img src="logo.png" alt="" width="34" height="44"><div><b class="sig-name">AR METHODS</b><span>Founded &amp; run by <b>${esc(BRAND.ceo)}</b>, CEO · Perth, WA</span></div></footer>`;
 }
 
 function markTab(name) {
@@ -192,9 +193,9 @@ async function route() {
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
     home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews,
-    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport,
+    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand,
   };
-  const adminOnly = ["admin", "worker", "pool", "team", "report"];
+  const adminOnly = ["admin", "worker", "pool", "team", "report", "brand"];
   let fn = routes[name] || screenHome;
   if (adminOnly.includes(name) && !isAdmin()) fn = screenHome;
   markTab(adminOnly.includes(name) ? "admin" : name);
@@ -216,6 +217,7 @@ function renderAuth(mode = "signin", msg = "") {
         <img src="logo.png" alt="AR Methods" width="64" height="82" class="auth-logo">
         <h1 class="wordmark">AR METHODS</h1>
         <p class="tagline">WEBSITES • SYSTEMS • GROWTH</p>
+        <p class="founder"><span>Founded &amp; run by</span><b>${esc(BRAND.ceo)}</b><small>CEO · Perth, WA</small></p>
         <h2>${owner ? "Owner setup" : "Sign in to Leads"}</h2>
         ${owner ? `<p class="muted">First time only. Create the owner account for ${esc(OWNER_EMAIL)}. Workers get their logins from you.</p>` : ""}
         ${errorBox(msg)}
@@ -232,7 +234,7 @@ function renderAuth(mode = "signin", msg = "") {
             : `<button class="linkbtn" id="forgot">Forgot password?</button>`}
         </div>
       </div>
-      <footer class="foot">Made by <b>AR Methods</b> · CEO <b>Aman Raju</b></footer>
+      <footer class="foot sig"><img src="logo.png" alt="" width="34" height="44"><div><b class="sig-name">AR METHODS</b><span>Founded &amp; run by <b>${esc(BRAND.ceo)}</b>, CEO · Perth, WA</span></div></footer>
     </div>`;
   document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => renderAuth(b.dataset.mode)));
   $("#forgot")?.addEventListener("click", async () => {
@@ -295,7 +297,7 @@ try {
   const boot = uid && readBoot(uid);
   if (boot?.me?.active) {
     optimisticUid = uid;
-    Object.assign(state, { user: { uid }, me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "" });
+    Object.assign(state, { user: { uid }, me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "", brand: boot.brand || {} });
     startApp();
   }
 } catch {}
@@ -315,7 +317,7 @@ D.onAuthStateChanged(D.auth, async (user) => {
     // already on screen from the device's copy
   } else if (boot?.me?.active) {
     // Show the app straight away from the device's copy
-    Object.assign(state, { me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "" });
+    Object.assign(state, { me: boot.me, goal: boot.goal || 30, googleToken: boot.googleToken || "", brand: boot.brand || {} });
     startApp();
   } else {
     $("#app").innerHTML = `<div class="loading"><span class="spinner"></span>Loading…</div>`;
@@ -342,8 +344,10 @@ D.onAuthStateChanged(D.auth, async (user) => {
         : renderBlocked("Account turned off", "Your account has been deactivated. Contact Aman if you think this is a mistake.");
     }
     const goal = team?.dailyGoal || 30;
+    const brand = { brandLink: team?.brandLink || "", brandPhone: team?.brandPhone || "" };
+    state.brand = brand;
     const changed = !boot?.me || boot.me.role !== me.role || boot.me.name !== me.name || boot.goal !== goal || boot.googleToken !== googleToken;
-    saveBoot(user.uid, { me, goal, googleToken });
+    saveBoot(user.uid, { me, goal, googleToken, brand });
     Object.assign(state, { me, goal, googleToken });
     if (!boot?.me?.active || changed) startApp(); // first visit, or something changed: redraw with fresh data
   } catch (e) {
@@ -644,7 +648,7 @@ function myLeadCard(l, now) {
         <h3>${esc(l.name)} <span class="badge ${esc(l.websiteKind)}">${KIND_LABEL[l.websiteKind] || ""}</span> <span class="status s-${esc(l.status.replace(/\s/g, ""))}">${esc(l.status)}</span></h3>
         <p class="muted">${esc(l.category)}${l.address ? " · " + esc(l.address) : ""} · ${esc(l.suburb)}${l.lastCalledAt ? " · last called " + esc(fmtDateTime(l.lastCalledAt)) : ""}</p>
         ${due ? `<p class="due-line">Call back ${esc(fmtDateTime(l.callbackAt))}</p>` : ""}
-        <p class="row">${phoneHtml(l.phone)} ${leadLinks(l)}</p>
+        <p class="row">${phoneHtml(l.phone)} <button class="linkbtn" data-texts>💬 Texts</button> ${leadLinks(l)}</p>
         ${siteHint(l)}
         <div class="log">
           <label for="n-${esc(l.id)}">Notes</label>
@@ -678,8 +682,22 @@ function scriptHtml(l) {
   </details>`;
 }
 
+function showTexts(lead) {
+  const phone = cleanPhone(lead.phone || "");
+  const texts = textsFor(lead, state.me, state.brand);
+  showModal(`<h2>Text ${esc(lead.name)}</h2>
+    <p class="muted small">Every text is signed ${esc(BRAND.name)}, so they know who you are.</p>
+    <div class="texts">${texts.map((t, i) => `<div class="text-tpl"><b>${esc(t.label)}</b><p>${esc(t.text).replace(/\n/g, "<br>")}</p>
+      <div class="toolbar">${phone.valid ? `<a class="primary small" href="sms:${esc(phone.tel)}?&body=${encodeURIComponent(t.text)}">Send</a>` : ""}<button class="ghost small" data-copy-text="${i}">Copy</button></div></div>`).join("")}</div>`);
+  document.querySelectorAll("[data-copy-text]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(texts[Number(b.dataset.copyText)].text); toast("Text copied"); }
+    catch { toast("Couldn't copy", "bad"); }
+  }));
+}
+
 function wireLeadCard(card) {
   const lead = state.myLeads.find((l) => l.id === card.dataset.id);
+  card.querySelector("[data-texts]")?.addEventListener("click", () => showTexts(lead));
   const notes = card.querySelector("textarea");
   const cbBox = card.querySelector(".cb");
   const cbInput = card.querySelector('input[type="datetime-local"]');
@@ -727,6 +745,7 @@ function wireLeadCard(card) {
 
 function showAfterWon(lead, value) {
   showModal(`<div class="won-head"><span>💰</span><h2>${esc(lead.name)} is in. ${money(value)}.</h2>
+      <p class="won-brand">Another ${esc(BRAND.name)} client. Send them the thank-you text from their lead card.</p>
       <p class="muted">You earned <b>${money(commissionFor(value))}</b>. Before you hang up, squeeze more out of it:</p></div>
     <div class="after-won">
       <div><b>1. Care plan (monthly money)</b><p>${esc(AFTER_WON.upsell)}</p></div>
@@ -818,7 +837,7 @@ function screenAccount() {
 // =====================================================================
 function adminNav(active) {
   return `<div class="subnav">
-    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["team", "Team"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
+    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["team", "Team"], ["brand", "Brand kit"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
   </div>`;
 }
 
@@ -1187,6 +1206,66 @@ function roastFor(calls, goal, name) {
 // =====================================================================
 // Review cards: Google review links for NFC cards, plus the upsell
 // =====================================================================
+// =====================================================================
+// Brand kit (admin): what clients see
+// =====================================================================
+function screenBrand() {
+  setTitle("Brand kit");
+  const b = state.brand || {};
+  const sample = { name: "Fade Factory" };
+  view().innerHTML = `${adminNav("brand")}<h1 class="page">Brand kit</h1>
+    <p class="muted">Get the ${esc(BRAND.name)} name in front of every client: in every text, on every website you build and on every review card.</p>
+    <form class="card" id="brandForm">
+      <h2>Your details</h2>
+      <p class="muted small">Shown at the bottom of every text your team sends and linked from the website credit. Leave blank to skip.</p>
+      <label for="bLink">Link (Instagram, Facebook, Linktree…)</label>
+      <input id="bLink" type="url" maxlength="200" placeholder="https://instagram.com/armethods" value="${esc(b.brandLink || "")}">
+      <label for="bPhone">Business phone</label>
+      <input id="bPhone" type="tel" maxlength="30" placeholder="04xx xxx xxx" value="${esc(b.brandPhone || "")}">
+      <button class="primary">Save</button>
+    </form>
+    <section class="card">
+      <h2>Text signature</h2>
+      <p class="muted small">Every text from the 💬 Texts button on a lead ends with this.</p>
+      <pre class="sig-preview" id="sigPrev"></pre>
+    </section>
+    <section class="card">
+      <h2>“Website by AR Methods” credit</h2>
+      <p class="muted small">Paste this at the very bottom of every website you build. Every visitor to your client's site sees your name.</p>
+      <div class="credit-prev" id="creditPrev"></div>
+      <code class="credit-code" id="creditCode"></code>
+      <div class="toolbar"><button class="primary small" id="copyCredit">Copy code</button></div>
+    </section>`;
+  const draw = () => {
+    const cur = { brandLink: safeUrl($("#bLink").value.trim()) || "", brandPhone: $("#bPhone").value.trim() };
+    $("#sigPrev").textContent = textsFor(sample, state.me, cur)[0].text;
+    $("#creditPrev").innerHTML = creditHtml(cur);
+    $("#creditCode").textContent = creditHtml(cur);
+    return cur;
+  };
+  draw();
+  $("#bLink").addEventListener("input", draw);
+  $("#bPhone").addEventListener("input", draw);
+  $("#copyCredit").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(creditHtml(draw())); toast("Credit code copied"); }
+    catch { toast("Couldn't copy", "bad"); }
+  });
+  $("#brandForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const raw = $("#bLink").value.trim();
+    if (raw && !safeUrl(raw)) return toast("That link doesn't look right. It should start with https://", "bad");
+    const cur = draw();
+    await busy(e.submitter || $("#brandForm button"), "Saving", async () => {
+      try {
+        await D.saveBrand(cur);
+        state.brand = cur;
+        try { const boot = readBoot(state.me.id); if (boot) saveBoot(state.me.id, { ...boot, brand: cur }); } catch {}
+        toast("Brand details saved");
+      } catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+  });
+}
+
 function reviewCardMock(name, rating) {
   const stars = Math.round(rating ?? 5);
   return `<div class="rv-card" aria-hidden="true">
@@ -1195,6 +1274,7 @@ function reviewCardMock(name, rating) {
       <div class="rv-stars">${"★".repeat(stars)}<span>${"★".repeat(5 - stars)}</span></div>
       <b class="rv-name">${esc(name)}</b>
       <small>Tap your phone here to leave us a review</small>
+      <span class="rv-by"><img src="logo.png" alt="" width="11" height="14">AR METHODS</span>
     </div>`;
 }
 
@@ -1289,7 +1369,7 @@ async function screenReviews(arg) {
     if (!won.length) { box.innerHTML = `<p class="muted small">Once you win deals, your clients show up here with a text ready to send them.</p>`; return; }
     box.innerHTML = `<div class="rev-clients">${won.map((l, i) => {
       const phone = cleanPhone(l.phone || "");
-      const body = encodeURIComponent(NFC.text(l.name, first));
+      const body = encodeURIComponent(NFC.text(l.name, state.me, state.brand));
       return `<div class="rev-client"><div><b>${esc(l.name)}</b><span class="muted small">${esc(l.phone || "")}</span></div>
         <div class="toolbar">
           ${phone.valid ? `<a class="primary small" href="sms:${esc(phone.tel)}?&body=${body}">Text them</a>` : ""}
@@ -1298,7 +1378,7 @@ async function screenReviews(arg) {
         </div></div>`;
     }).join("")}</div>`;
     box.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(NFC.text(won[Number(b.dataset.copy)].name, first)); toast("Text copied"); }
+      try { await navigator.clipboard.writeText(NFC.text(won[Number(b.dataset.copy)].name, state.me, state.brand)); toast("Text copied"); }
       catch { toast("Couldn't copy", "bad"); }
     }));
   } catch (e) { const box = $("#revClients"); if (box) box.innerHTML = errorBox(D.authMessage(e)); }
@@ -1410,7 +1490,7 @@ async function screenReport(arg) {
       <div class="toolbar"><button class="primary small" id="copyRep">Copy summary</button><button class="ghost small" id="csvRep">Download CSV</button></div>
     </section>`;
   const summary = [`AR Methods — week of ${label}`, `Team: ${rep.team.calls} calls, ${rep.team.interested} interested, ${rep.team.won} won, ${money(rep.team.revenue)} in sales`, ""]
-    .concat(rep.list.map((u, i) => `${i + 1}. ${u.name}: ${u.calls} calls, ${u.won} won, ${money(u.revenue)} sales, ${money(commissionBy(u.uid))} commission`)).join("\n");
+    .concat(rep.list.map((u, i) => `${i + 1}. ${u.name}: ${u.calls} calls, ${u.won} won, ${money(u.revenue)} sales, ${money(commissionBy(u.uid))} commission`), "", `${BRAND.name} · CEO ${BRAND.ceo}`).join("\n");
   $("#copyRep").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(summary); toast("Summary copied. Paste it in your group chat."); }
     catch { toast("Couldn't copy on this device.", "bad"); }
