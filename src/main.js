@@ -789,7 +789,7 @@ async function startOldChecks(result) {
   const sites = result.leads.filter((l) => l.websiteKind === "website" && safeUrl(l.website));
   state.oldSetup = null;
   if (state.psiKey === undefined) state.psiKey = await D.getPageSpeedKey().catch(() => "");
-  let key = state.psiKey || PAGESPEED_KEY || firebaseApiKey();
+  let key = PAGESPEED_KEY || state.psiKey || firebaseApiKey();
   for (const l of sites) {
     const c = state.oldChecks.get(l.id);
     if (c?.status === "done") l.oldSite = { score: c.score, reasons: c.reasons, label: oldLabel(c.score) };
@@ -818,7 +818,7 @@ async function startOldChecks(result) {
           out = { ...scoreSite({ quick, full }), full: !full.timedOut && !full.error, mobile: full.mobile ?? null, speed: full.speed ?? null };
           D.saveSiteCheck(id, { url: l.website, score: out.score, reasons: out.reasons, mobile: out.mobile, speed: out.speed, https: full.https ?? quick.https, full: out.full }).catch(() => {});
         } catch (e) {
-          if (e instanceof SetupError || e instanceof CheckQuotaError) { fullOn = false; state.oldSetup = e instanceof SetupError ? "setup" : "quota"; }
+          if (e instanceof SetupError || e instanceof CheckQuotaError) { fullOn = false; state.oldSetup = e instanceof SetupError ? "setup" : "quota"; state.oldSetupMsg = e.message || ""; }
           out = { ...scoreSite({ quick }), full: false };
         }
       }
@@ -844,7 +844,11 @@ function drawOldResults() {
     .sort((a, b) => b.c.score - a.c.score || (a.c.status === "checking") - (b.c.status === "checking"));
   const done = sites.length - checking;
   $("#results").innerHTML = `
-    ${state.oldSetup === "setup" ? `<div class="notice warn old-setup">${isAdmin()
+    ${state.oldSetup === "setup" && PAGESPEED_KEY ? `<div class="notice warn old-setup"><b>Google's website checker didn't accept the request</b>, so only quick checks ran.
+        <p class="small">Google said: “${esc(state.oldSetupMsg || "no reason given")}”</p>
+        <p class="small">If you just updated the app, close it completely and reopen it. If this keeps happening, send Aman a screenshot of this box.</p>
+        <button class="primary small" id="oldRetry">Try again</button></div>`
+    : state.oldSetup === "setup" ? `<div class="notice warn old-setup">${isAdmin()
       ? `<b>Full website checks aren't switched on yet</b>, so only quick checks ran (no padlock, free builder address). To also catch <b>not mobile-friendly</b> and <b>slow</b> sites (free, no card, 2 minutes):
         <ol><li>Open <a href="https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com?project=armethods" target="_blank" rel="noopener">PageSpeed Insights API</a> (project <b>armethods</b>) and click <b>Enable</b>.</li>
         <li>Go to <a href="https://console.cloud.google.com/apis/credentials?project=armethods" target="_blank" rel="noopener">Credentials</a> → <b>Create credentials → API key</b>. Copy it.</li>
@@ -860,6 +864,7 @@ function drawOldResults() {
     <div class="list">${shown.length ? shown.map(({ l, c }) => oldCard(l, c)).join("")
       : `<div class="empty">${sites.length ? (checking ? "Still checking…" : "None of these websites look outdated. Try another business type or suburb.") : "None of these businesses have a website listed. Switch to 🔎 No website to call them instead."}</div>`}</div>`;
   document.querySelectorAll("[data-of]").forEach((b) => b.addEventListener("click", () => { state.oldFilter = b.dataset.of; drawOldResults(); }));
+  $("#oldRetry")?.addEventListener("click", () => { state.oldChecks = new Map(); state.oldSetup = null; startOldChecks(state.search); });
   document.querySelectorAll("[data-claim]").forEach((b) => b.addEventListener("click", () => doClaim(b)));
   $("#psiSave")?.addEventListener("click", async (e) => {
     const k = $("#psiKey").value.trim();
