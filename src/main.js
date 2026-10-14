@@ -1,11 +1,12 @@
 // AR Methods Leads — app shell, routing and screens.
 import * as D from "./data.js";
+import { newGame, step as gameStep, jump as gameJump, draw as gameDraw, gameScore, GAME_MAX_SECS } from "./game.js";
 import { quickSignals, pageSpeed, scoreSite, siteKey, oldLabel, OLD_MIN, SetupError, CheckQuotaError } from "./oldsite.js";
 import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE, findPlaceForReview, reviewLink, leadKey } from "./search.js";
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, GAME, makeGameQuestions, gamePoints, playsEarned, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
+  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, GAME, playsEarned, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -589,8 +590,8 @@ async function screenHome() {
         const toNext = GAME.callsPerPlay - (t.calls % GAME.callsPerPlay);
         return `<a class="card game-card ${earned ? "ready" : "locked"}" href="#game">
           <span class="game-ico" aria-hidden="true">🎮</span>
-          <span><b>Break game: Objection Rush</b>
-          <small>${isAdmin() ? "Admin: unlimited rounds" : earned ? `Round${earned === 1 ? "" : "s"} earned today: ${earned}. Take a 45-second break.` : `Call ${toNext} more lead${toNext === 1 ? "" : "s"} to unlock a round`}</small></span>
+          <span><b>Break game: Stag Run</b>
+          <small>${isAdmin() ? "Admin: unlimited rounds" : earned ? `Round${earned === 1 ? "" : "s"} earned today: ${earned}. Every ${GAME.callsPerPlay} calls earns another.` : `Call ${toNext} more lead${toNext === 1 ? "" : "s"} to unlock a round`}</small></span>
           <span class="game-go">${earned ? "Play" : "🔒"}</span></a>`;
       })() : ""}
       <section class="tiles">
@@ -1648,7 +1649,7 @@ async function screenTeam() {
     </form>
     <section class="card">
       <h2>Break game</h2>
-      <p class="muted small">Objection Rush: workers earn a 45-second round for every ${GAME.callsPerPlay} leads they call (max ${GAME.maxPlays} a day). It trains objection handling. Switch it off any time.</p>
+      <p class="muted small">Stag Run: workers earn a round for every ${GAME.callsPerPlay} leads they call (max ${GAME.maxPlays} a day). A round ends on a crash or after ${GAME_MAX_SECS} seconds. Switch it off any time.</p>
       <label class="check"><input type="checkbox" id="gamesOn" ${state.gamesOn !== false ? "checked" : ""}> Break game on</label>
     </section>
     <form class="card" id="goalForm">
@@ -1790,8 +1791,8 @@ async function screenGame() {
   box.innerHTML = `
     <section class="game-intro">
       <span class="game-big" aria-hidden="true">🎮</span>
-      <h1 class="page">Objection Rush</h1>
-      <p class="muted">A customer objection pops up. Tap the best comeback, fast. 45 seconds. Streaks multiply your points. Every round makes you better on the phone.</p>
+      <h1 class="page">Stag Run</h1>
+      <p class="muted">Tap (or press Space) to jump, tap again in the air to double jump. Dodge the blocks, grab the $ coins. It gets faster the longer you last. A round ends when you crash, or after ${GAME_MAX_SECS} seconds.</p>
       <div class="game-plays">${isAdmin() ? "Admin: unlimited rounds" : `<b>${left}</b> round${left === 1 ? "" : "s"} left today · ${mine.plays || 0} played${earned < GAME.maxPlays ? ` · next round at ${calls + toNext} leads called` : ""}`}</div>
       ${left > 0 ? `<button class="primary game-start" id="gameStart">Start round</button>`
         : `<div class="game-locked">🔒 ${earned >= GAME.maxPlays ? `That's all ${GAME.maxPlays} rounds for today. Back to the phones!` : `Call ${toNext} more lead${toNext === 1 ? "" : "s"} to earn your next round.`}</div>
@@ -1809,62 +1810,63 @@ async function screenGame() {
 
 function playRound(rid) {
   const box = view().querySelector(".game");
-  const qs = makeGameQuestions();
-  let i = 0, score = 0, streak = 0, right = 0, answered = 0, shownAt = 0, locked = false;
-  const endAt = Date.now() + GAME.secs * 1000;
   box.innerHTML = `
     <section class="game-play">
-      <div class="game-hud"><span>Score <b id="gScore">0</b></span><span id="gStreak" class="game-streak"></span><span><b id="gTime">${GAME.secs}</b>s</span></div>
-      <div class="game-timer"><span id="gBar"></span></div>
-      <div class="game-q" id="gQ"></div>
-      <div class="game-opts" id="gOpts"></div>
+      <div class="game-hud"><span>Score <b id="gScore">0</b></span><span id="gCoins" class="game-streak">$ 0</span><span><b id="gTime">${GAME_MAX_SECS}</b>s</span></div>
+      <div class="runner-wrap" id="gWrap"><canvas id="gCanvas" aria-label="Stag Run game. Tap to jump."></canvas>
+        <div class="runner-hint" id="gHint">Tap to jump</div></div>
     </section>`;
-  const show = () => {
-    const q = qs[i % qs.length];
-    $("#gQ").textContent = q.q;
-    $("#gOpts").innerHTML = q.options.map((o, k) => `<button class="game-opt" data-k="${k}">${esc(o)}</button>`).join("");
-    shownAt = Date.now(); locked = false;
-    $("#gOpts").querySelectorAll(".game-opt").forEach((b) => b.addEventListener("click", () => pick(b, q)));
+  const canvas = $("#gCanvas"), wrap = $("#gWrap");
+  const ctx = canvas.getContext("2d");
+  const img = new Image(); img.src = "logo.png";
+  // taller play area on phones; the game world's width follows the screen's shape
+  const cssSize = () => { const w = wrap.clientWidth; return { w, h: Math.round(w < 600 ? Math.min(320, Math.max(230, w * 0.8)) : Math.max(220, w * 260 / 720)) }; };
+  const first = cssSize();
+  const g = newGame(Math.random, 260 * first.w / first.h);
+  const size = () => {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const { w, h } = cssSize();
+    canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.height = h + "px";
+    return dpr;
   };
-  const pick = (b, q) => {
-    if (locked) return;
-    locked = true; answered++;
-    const ok = q.options[Number(b.dataset.k)] === q.right;
-    if (ok) { streak++; right++; score += gamePoints((Date.now() - shownAt) / 1000, streak); b.classList.add("good"); }
-    else {
-      streak = 0; b.classList.add("bad");
-      $("#gOpts").querySelectorAll(".game-opt").forEach((x) => { if (q.options[Number(x.dataset.k)] === q.right) x.classList.add("good"); });
-    }
-    $("#gScore").textContent = score;
-    $("#gStreak").textContent = streak >= 3 ? `🔥 ${streak} streak ×${streak >= 6 ? 3 : 2}` : "";
-    setTimeout(() => { if (rid !== state.routeId || Date.now() >= endAt) return; i++; show(); }, ok ? 350 : 1100);
+  let dpr = size();
+  const onResize = () => { dpr = size(); };
+  window.addEventListener("resize", onResize);
+  const tap = (e) => { e.preventDefault(); gameJump(g); $("#gHint")?.remove(); };
+  const key = (e) => { if (e.code === "Space" || e.code === "ArrowUp") tap(e); };
+  wrap.addEventListener("pointerdown", tap);
+  document.addEventListener("keydown", key);
+  const cleanup = () => { window.removeEventListener("resize", onResize); document.removeEventListener("keydown", key); };
+  let last = performance.now();
+  const frame = (now) => {
+    if (rid !== state.routeId) return cleanup();
+    const dt = (now - last) / 1000; last = now;
+    if (document.visibilityState === "visible") gameStep(g, dt);
+    gameDraw(ctx, g, img, canvas.width, canvas.height);
+    $("#gScore").textContent = gameScore(g);
+    $("#gCoins").textContent = `$ ${g.coins}`;
+    $("#gTime").textContent = Math.max(0, Math.ceil(GAME_MAX_SECS - g.t));
+    if (g.over) { cleanup(); setTimeout(() => finish(), g.crashed ? 700 : 0); return; }
+    requestAnimationFrame(frame);
   };
-  const tick = setInterval(() => {
-    if (rid !== state.routeId) return clearInterval(tick);
-    const ms = Math.max(0, endAt - Date.now());
-    $("#gTime").textContent = Math.ceil(ms / 1000);
-    $("#gBar").style.width = `${(ms / (GAME.secs * 1000)) * 100}%`;
-    if (ms <= 0) { clearInterval(tick); finish(); }
-  }, 100);
+  requestAnimationFrame(frame);
   const finish = async () => {
-    locked = true;
+    const score = gameScore(g);
     let best = score;
     try { best = await D.finishGameRound(state.me, score); } catch {}
     if (rid !== state.routeId) return;
-    const acc = answered ? Math.round((right / answered) * 100) : 0;
     box.innerHTML = `
       <section class="game-intro game-done">
-        <span class="game-big" aria-hidden="true">${score >= best && score > 0 ? "🏆" : "⏱️"}</span>
+        <span class="game-big" aria-hidden="true">${score >= best && score > 0 ? "🏆" : g.crashed ? "💥" : "⏱️"}</span>
         <h1 class="page">${score} points</h1>
-        <p class="muted">${right} of ${answered} right (${acc}%)${score >= best && score > 0 ? " · new best today!" : ` · best today ${best}`}</p>
-        <p class="game-tip">${acc >= 80 ? "Sharp. Now go use those lines on a real call." : "Tip: open the 📜 Call script on any lead to study the comebacks."}</p>
+        <p class="muted">${g.crashed ? "Crashed" : "Time's up"} after ${Math.round(g.t)}s · ${g.coins} coin${g.coins === 1 ? "" : "s"}${score >= best && score > 0 ? " · new best today!" : ` · best today ${best}`}</p>
+        <p class="game-tip">Break's over. Every ${GAME.callsPerPlay} calls earns another round.</p>
         <a class="primary game-start" href="#leads">Back to calls 📞</a>
         <button class="linkbtn" id="gameAgain">See rounds left</button>
       </section>`;
     $("#gameAgain").addEventListener("click", () => screenGame());
     if (score >= best && score > 0) confetti();
   };
-  show();
 }
 
 // =====================================================================

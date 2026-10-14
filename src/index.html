@@ -348,6 +348,10 @@
   .game-streak { color: #ffb36b; font-weight: 800; }
   .game-timer { height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; margin: 10px 0 18px; }
   .game-timer span { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff5c52, #f4c46a, #9b7bff); transition: width .1s linear; }
+  .runner-wrap { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid rgba(226,185,104,.3); touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
+  .runner-wrap canvas { display: block; width: 100%; }
+  .runner-hint { position: absolute; inset: auto 0 18px; text-align: center; font-weight: 800; color: #f6dca0; text-shadow: 0 2px 10px #000; pointer-events: none; animation: hint-pulse 1.2s ease-in-out infinite; }
+  @keyframes hint-pulse { 50% { opacity: .4; } }
   .game-q { font: 800 clamp(22px, 5vw, 30px)/1.2 var(--sans); letter-spacing: -.02em; text-align: center; margin: 8px 0 18px; min-height: 2.4em; }
   .game-opts { display: grid; gap: 10px; }
   .game-opt { font: inherit; text-align: left; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border-strong); background: rgba(255,255,255,.04); color: var(--text); cursor: pointer; line-height: 1.35; }

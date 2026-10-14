@@ -442,13 +442,13 @@ test("break game: rounds must be earned with calls; scores can't be faked", asyn
   const round = (o = {}) => ({ uid: "w1", name: "Sam", day: TODAY, week: WEEK, plays: 1, best: 0, at: serverTimestamp(), ...o });
   // no calls yet → no rounds
   await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round()));
-  // 10 calls today → 1 round
-  await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), `stats/${TODAY}_w1`), { uid: "w1", name: "Sam", day: TODAY, week: WEEK, calls: 10, interested: 0, won: 0, points: 10 }));
+  // 3 calls today → 1 round
+  await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), `stats/${TODAY}_w1`), { uid: "w1", name: "Sam", day: TODAY, week: WEEK, calls: 3, interested: 0, won: 0, points: 3 }));
   await assertSucceeds(setDoc(doc(as("w1"), `gameScores/${id}`), round()));
   await assertSucceeds(setDoc(doc(as("w1"), `gameScores/${id}`), round({ best: 900 })));          // finish: raise best
   await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ best: 100 })));             // can't lower
   await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ best: 99999 })));           // impossible score
-  await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ plays: 2, best: 900 })));   // 2nd round needs 20 calls
+  await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ plays: 2, best: 900 })));   // 2nd round needs 6 calls
   await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ plays: 0, best: 900 })));   // can't reset plays
   await assertFails(setDoc(doc(as("w2"), `gameScores/${TODAY}_w2`), round({ uid: "w2", name: "Sam" }))); // wrong name / no calls
   await assertSucceeds(setDoc(doc(as("owner"), `gameScores/${TODAY}_owner`), round({ uid: "owner", name: "Aman" }))); // admin plays freely
