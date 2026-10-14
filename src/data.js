@@ -84,7 +84,7 @@ export const updateUser = (uid, fields) => updateDoc(doc(db, "users", uid), { ..
 export async function getTeamSettings() {
   const snap = await getDoc(doc(db, "settings", "team"));
   const d = snap.exists() ? snap.data() : {};
-  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10, brandLink: d.brandLink ?? BRAND_LINK, brandPhone: d.brandPhone ?? BRAND_PHONE };
+  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10, brandLink: d.brandLink ?? BRAND_LINK, brandPhone: d.brandPhone ?? BRAND_PHONE, gamesOn: d.gamesOn !== false };
 }
 /** Brand details clients see (link + phone in texts and the website credit). Keeps the daily goal as is. */
 export async function saveBrand({ brandLink, brandPhone }) {
@@ -93,6 +93,10 @@ export async function saveBrand({ brandLink, brandPhone }) {
 }
 export const getDailyGoal = async () => (await getTeamSettings()).dailyGoal;
 export const saveTeamSettings = (dailyGoal) => setDoc(doc(db, "settings", "team"), { dailyGoal }, { merge: true });
+export async function setGamesOn(on) {
+  const { dailyGoal } = await getTeamSettings();
+  return setDoc(doc(db, "settings", "team"), { dailyGoal, gamesOn: on }, { merge: true });
+}
 export async function getGoogleToken() {
   const snap = await getDoc(doc(db, "settings", "integrations"));
   return snap.exists() ? snap.data().apifyToken || "" : "";
@@ -164,10 +168,14 @@ export class TakenError extends Error {
 export async function claimLead(me, lead) {
   await runTransaction(db, async (tx) => {
     const claimRef = doc(db, "claims", lead.id);
+    const leadRef = doc(db, "leads", lead.id);
     const claim = await tx.get(claimRef);
     if (claim.exists()) throw new TakenError(claim.data().name);
+    const existing = await tx.get(leadRef);
     tx.set(claimRef, { uid: me.id, name: me.name, at: serverTimestamp() });
-    tx.set(doc(db, "leads", lead.id), leadDoc(lead, me.id, me.name, me.id));
+    // A business already in the system (e.g. back in the pool) keeps its history, payment and earned bonuses
+    if (existing.exists()) tx.update(leadRef, { assignedTo: me.id, assignedName: me.name, updatedAt: serverTimestamp() });
+    else tx.set(leadRef, leadDoc(lead, me.id, me.name, me.id));
   });
   logEvent(me, "claim", `claimed ${lead.name} (${lead.suburb})`, { leadId: lead.id });
 }
@@ -241,7 +249,12 @@ export async function logCall(me, lead, status, notes, callbackAt, dealValue = 0
   const callRef = doc(collection(db, "calls"));
   const statRef = doc(db, "stats", `${day}_${me.id}`);
   let earned = null;
-  await runTransaction(db, async (tx) => {
+  try { await logCallTx(); } catch (e) {
+    // Dates are checked against the server clock, so a wrong phone clock gets rejected
+    if (String(e?.code || "").includes("permission-denied")) throw new Error("Couldn't save that call. Make sure your phone's date and time are set automatically, then try again.");
+    throw e;
+  }
+  async function logCallTx() { await runTransaction(db, async (tx) => {
     const [leadSnap, stat] = [await tx.get(leadRef), await tx.get(statRef)];
     const cur = leadSnap.data();
     const counted = cur.countedDay !== day ? 1 : 0;
@@ -271,7 +284,7 @@ export async function logCall(me, lead, status, notes, callbackAt, dealValue = 0
       revenue: (prev.revenue || 0) + value,
     });
     earned = { counted, bonusI, bonusW, points, value };
-  });
+  }); }
   const note = notes.trim() ? `: “${notes.trim().slice(0, 120)}”` : "";
   const money = earned.bonusW && earned.value ? ` ($${earned.value.toLocaleString("en-AU")})` : "";
   const flag = earned.points ? "" : " (already counted today, no points)";
@@ -378,6 +391,39 @@ export function watchPresence(cb, onErr) {
     snap.forEach((d) => m.set(d.id, d.data({ serverTimestamps: "estimate" })));
     cb(m);
   }, onErr);
+}
+
+// ---------- break game ----------
+export async function getMyGame(me) {
+  const snap = await getDoc(doc(db, "gameScores", `${perthDay()}_${me.id}`));
+  return snap.exists() ? snap.data() : { plays: 0, best: 0 };
+}
+/** Uses one earned play. Throws if none are left (the rules check it too). */
+export async function startGameRound(me) {
+  const day = perthDay();
+  const ref = doc(db, "gameScores", `${day}_${me.id}`);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const cur = snap.exists() ? snap.data() : null;
+    tx.set(ref, { uid: me.id, name: me.name, day, week: weekStart(day), plays: (cur?.plays || 0) + 1, best: cur?.best || 0, at: serverTimestamp() });
+  });
+}
+export async function finishGameRound(me, score) {
+  const day = perthDay();
+  const ref = doc(db, "gameScores", `${day}_${me.id}`);
+  let best = 0;
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const cur = snap.data();
+    best = Math.max(cur.best || 0, Math.max(0, Math.min(5000, Math.round(score))));
+    if (best !== cur.best) tx.set(ref, { ...cur, best, at: serverTimestamp() });
+  });
+  return best;
+}
+export async function getGameWeek() {
+  const snap = await getDocs(query(collection(db, "gameScores"), where("week", "==", weekStart(perthDay()))));
+  return snap.docs.map((d) => d.data());
 }
 
 // ---------- team chat ----------

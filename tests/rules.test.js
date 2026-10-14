@@ -141,7 +141,9 @@ test("worker can't take another worker's lead", async () => {
 test("workers only see their own leads; everyone sees claims", async () => {
   await assertSucceeds(getDoc(doc(as("w1"), "leads/sam1")));
   await assertFails(getDoc(doc(as("w2"), "leads/sam1")));
-  await assertFails(getDoc(doc(as("w2"), "leads/pool1")));
+  await assertSucceeds(getDoc(doc(as("w2"), "leads/pool1")));   // unassigned pool lead: readable so it can be claimed safely
+  await assertSucceeds(getDoc(doc(as("w2"), "leads/does-not-exist")));
+  await assertFails(getDoc(doc(as("off"), "leads/pool1")));
   await assertSucceeds(getDocs(query(collection(as("w1"), "leads"), where("assignedTo", "==", "w1"))));
   await assertFails(getDocs(collection(as("w1"), "leads")));
   await assertSucceeds(getDoc(doc(as("w2"), "claims/sam1")));
@@ -433,4 +435,47 @@ test("integrations: admin saves the website-check key without wiping the Google 
   await assertSucceeds(setDoc(doc(as("owner"), "settings/integrations"), { apifyToken: "apify_api_x" }));
   await assertSucceeds(setDoc(doc(as("owner"), "settings/integrations"), { pageSpeedKey: "AIzaTEST" }, { merge: true }));
   await assertFails(setDoc(doc(as("w1"), "settings/integrations"), { pageSpeedKey: "AIzaMINE" }, { merge: true }));
+});
+
+test("break game: rounds must be earned with calls; scores can't be faked", async () => {
+  const id = `${TODAY}_w1`;
+  const round = (o = {}) => ({ uid: "w1", name: "Sam", day: TODAY, week: WEEK, plays: 1, best: 0, at: serverTimestamp(), ...o });
+  // no calls yet → no rounds
+  await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round()));
+  // 10 calls today → 1 round
+  await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), `stats/${TODAY}_w1`), { uid: "w1", name: "Sam", day: TODAY, week: WEEK, calls: 10, interested: 0, won: 0, points: 10 }));
+  await assertSucceeds(setDoc(doc(as("w1"), `gameScores/${id}`), round()));
+  await assertSucceeds(setDoc(doc(as("w1"), `gameScores/${id}`), round({ best: 900 })));          // finish: raise best
+  await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ best: 100 })));             // can't lower
+  await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ best: 99999 })));           // impossible score
+  await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ plays: 2, best: 900 })));   // 2nd round needs 20 calls
+  await assertFails(setDoc(doc(as("w1"), `gameScores/${id}`), round({ plays: 0, best: 900 })));   // can't reset plays
+  await assertFails(setDoc(doc(as("w2"), `gameScores/${TODAY}_w2`), round({ uid: "w2", name: "Sam" }))); // wrong name / no calls
+  await assertSucceeds(setDoc(doc(as("owner"), `gameScores/${TODAY}_owner`), round({ uid: "owner", name: "Aman" }))); // admin plays freely
+  await assertSucceeds(getDocs(collection(as("w2"), "gameScores")));
+});
+
+test("admin can switch the break game off", async () => {
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, gamesOn: false }));
+  await assertFails(setDoc(doc(as("owner"), "settings/team"), { dailyGoal: 30, gamesOn: "nah" }));
+});
+
+test("claiming a lead from the pool can't wipe its history or earned bonuses", async () => {
+  await updateDoc(doc(as("owner"), "leads/pool1"), { status: "Won", gotWon: true, payment: "deposit", notes: "paid deposit" });
+  const db = as("w2");
+  const wipe = writeBatch(db);
+  wipe.set(doc(db, "claims/pool1"), { uid: "w2", name: "Jo" });
+  wipe.set(doc(db, "leads/pool1"), lead({ name: "Pool Cafe", assignedTo: "w2", assignedName: "Jo", status: "New" }));
+  await assertFails(wipe.commit());
+  const ok = writeBatch(db);
+  ok.set(doc(db, "claims/pool1"), { uid: "w2", name: "Jo" });
+  ok.update(doc(db, "leads/pool1"), { assignedTo: "w2", assignedName: "Jo", updatedAt: serverTimestamp() });
+  await assertSucceeds(ok.commit());
+  const l = await getDoc(doc(as("owner"), "leads/pool1"));
+  assert1(l.data().gotWon === true && l.data().payment === "deposit" && l.data().notes === "paid deposit", "history kept");
+});
+
+test("search records must have numeric counts", async () => {
+  await assertFails(setDoc(doc(as("w1"), "searches/x1"), { uid: "w1", results: "<img src=x onerror=alert(1)>" }));
+  await assertSucceeds(setDoc(doc(as("w1"), "searches/x2"), { uid: "w1", results: 12, noWebsite: 3 }));
 });

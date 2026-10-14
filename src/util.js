@@ -69,7 +69,7 @@ export function streakFrom(daysWithCalls, today) {
 // ---------- CSV ----------
 export function csvCell(v) {
   let s = v == null ? "" : String(v);
-  if (/^[=@\t\r]/.test(s) || /^[+-](?![\d ])/.test(s)) s = "'" + s;
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s)) s = "'" + s; // block spreadsheet formulas, keep plain numbers
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 export function downloadCsv(rows, cols, filename) {

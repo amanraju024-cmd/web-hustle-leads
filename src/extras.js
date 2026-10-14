@@ -302,3 +302,37 @@ export const DEFAULT_PACKAGES = [
 // Referrals: a client who sends you a business that buys earns a reward
 // =====================================================================
 export const REFERRAL_REWARD = 50;
+
+// =====================================================================
+// Break game: "Objection Rush" — match each objection to the best comeback.
+// Earned, not free: 1 round per 10 leads called today, max 3 a day.
+// =====================================================================
+export const GAME = { secs: 45, callsPerPlay: 10, maxPlays: 3 };
+export const GAME_ROUNDS = [
+  ...OBJECTIONS,
+  ["“How much does it cost?”", "Sites start at $500, and the mockup's free so you can see it first. One or two new customers usually pays for it."],
+  ["“Can you call back later?”", "Of course. What time suits? I'll lock it in so I'm not chasing you."],
+  ["“My nephew does websites.”", "Love that. If he ever gets busy, keep us in mind. Want a free mockup to compare?"],
+  ["“I get enough work already.”", "That's great. A site lets you pick the better jobs and charge more, because people trust you before they call."],
+  ["“Is this a scam?”", "Fair question! We're AR Methods, a local Perth business. You don't pay a cent until you've seen your site and you're happy."],
+  ["“Just email me something.”", "Even better, I'll text you an actual mockup of your website. What's the best number for it?"],
+  ["“We tried a website before and it did nothing.”", "That happens when a site isn't set up for Google. Ours come with Google search setup, so people actually find you."],
+  ["“I'll think about it.”", "Totally fair. What's the main thing you'd want to think over? I can probably answer it right now."],
+];
+
+/** Builds a shuffled round: each question has the right comeback plus 2 wrong ones. */
+export function makeGameQuestions(rng = Math.random) {
+  const shuffle = (a) => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+  return shuffle(GAME_ROUNDS).map(([q, right]) => {
+    const wrong = shuffle(GAME_ROUNDS.filter(([, a]) => a !== right)).slice(0, 2).map(([, a]) => a);
+    return { q, right, options: shuffle([right, ...wrong]) };
+  });
+}
+
+/** Points for a correct answer: 100 + up to 50 for speed, times the streak bonus. */
+export function gamePoints(secondsTaken, streak) {
+  const speed = Math.max(0, Math.round(50 - secondsTaken * 10));
+  const mult = streak >= 6 ? 3 : streak >= 3 ? 2 : 1;
+  return (100 + speed) * mult;
+}
+export const playsEarned = (callsToday, isAdmin) => (isAdmin ? 99 : Math.min(GAME.maxPlays, Math.floor((callsToday || 0) / GAME.callsPerPlay)));

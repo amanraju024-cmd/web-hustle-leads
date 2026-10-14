@@ -71,7 +71,8 @@ service cloud.firestore {
         && (!('commissionPct' in request.resource.data)
             || (request.resource.data.commissionPct is number && request.resource.data.commissionPct >= 0 && request.resource.data.commissionPct <= 100))
         && (!('brandLink' in request.resource.data) || (request.resource.data.brandLink is string && request.resource.data.brandLink.size() <= 200))
-        && (!('brandPhone' in request.resource.data) || (request.resource.data.brandPhone is string && request.resource.data.brandPhone.size() <= 30));
+        && (!('brandPhone' in request.resource.data) || (request.resource.data.brandPhone is string && request.resource.data.brandPhone.size() <= 30))
+        && (!('gamesOn' in request.resource.data) || request.resource.data.gamesOn is bool);
     }
     // Google Maps data connection (Apify token): only signed-in team members can read it
     match /settings/integrations {
@@ -127,6 +128,8 @@ service cloud.firestore {
       }
 
       allow read: if isAdmin() || (isActive() && resource.data.assignedTo == request.auth.uid);
+      // workers may look up a lead that doesn't exist yet or sits unassigned in the pool (to claim it safely)
+      allow get: if isActive() && (resource == null || resource.data.assignedTo == null);
       allow create, update, delete: if isAdmin();
 
       // Worker claims a brand-new business from search
@@ -136,10 +139,11 @@ service cloud.firestore {
         && shortString(request.resource.data.name, 200)
         && claimedByMeInThisWrite();
 
-      // Worker claims an unassigned lead from the pool
+      // Worker claims an unassigned lead from the pool: only the assignment changes, its history stays
       allow update: if isActive()
         && resource.data.assignedTo == null
         && request.resource.data.assignedTo == request.auth.uid
+        && onlyChanged(['assignedTo', 'assignedName', 'updatedAt'])
         && claimedByMeInThisWrite();
 
       // Worker works their own lead: notes/call-back on their own, or a status change that comes
@@ -250,7 +254,9 @@ service cloud.firestore {
     // ---------- searches and activity feed ----------
     match /searches/{id} {
       allow read: if isAdmin() || (isActive() && resource.data.uid == request.auth.uid);
-      allow create: if isActive() && request.resource.data.uid == request.auth.uid;
+      allow create: if isActive() && request.resource.data.uid == request.auth.uid
+        && (!('results' in request.resource.data) || request.resource.data.results is int)
+        && (!('noWebsite' in request.resource.data) || request.resource.data.noWebsite is int);
       allow update, delete: if false;
     }
     // ---------- live team pop-ups ("Sam just closed a deal") ----------
@@ -294,6 +300,29 @@ service cloud.firestore {
         && shortString(request.resource.data.page, 40)
         && request.resource.data.visible is bool
         && request.resource.data.at == request.time;
+    }
+    // Break game: plays are earned (1 per 10 leads called today, max 3/day); admin plays freely.
+    // gameScores/{day}_{uid}: starting a round adds 1 play; finishing only raises the best score.
+    match /gameScores/{id} {
+      function g() { return request.resource.data; }
+      function callsToday() {
+        let st = /databases/$(database)/documents/stats/$(perthToday() + '_' + request.auth.uid);
+        return exists(st) ? get(st).data.calls : 0;
+      }
+      function shapeOk() {
+        return id == perthToday() + '_' + request.auth.uid
+          && g().keys().hasOnly(['uid', 'name', 'day', 'week', 'plays', 'best', 'at'])
+          && g().uid == request.auth.uid && g().name == profile().name
+          && g().day == perthToday() && g().week == perthWeek()
+          && g().best is int && g().best >= 0 && g().best <= 5000
+          && g().plays is int && g().at == request.time
+          && (isAdmin() || (g().plays <= 3 && g().plays * 10 <= callsToday()));
+      }
+      allow read: if isActive();
+      allow create: if isActive() && shapeOk() && g().plays == 1 && g().best == 0;
+      allow update: if isActive() && shapeOk()
+        && ((g().plays == resource.data.plays + 1 && g().best == resource.data.best)
+            || (g().plays == resource.data.plays && g().best >= resource.data.best));
     }
     // Team chat: everyone active reads and posts as themselves (name/role must match their profile); admin can delete
     match /messages/{id} {

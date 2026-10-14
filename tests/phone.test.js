@@ -93,3 +93,12 @@ test("old website scoring", () => {
   assert.equal(scoreSite({ quick: quickSignals("http://old.com.au") }).score, 20);
   assert.equal(siteKey("https://www.Old-Site.com.au/page"), "old-site.com.au");
 });
+
+import { makeGameQuestions, gamePoints, playsEarned, GAME_ROUNDS } from "../src/extras.js";
+test("break game rules", () => {
+  const qs = makeGameQuestions();
+  assert.equal(qs.length, GAME_ROUNDS.length);
+  for (const q of qs) { assert.equal(q.options.length, 3); assert.ok(q.options.includes(q.right)); assert.equal(new Set(q.options).size, 3); }
+  assert.equal(gamePoints(0, 1), 150); assert.equal(gamePoints(10, 1), 100); assert.equal(gamePoints(1, 3), 280); assert.equal(gamePoints(0, 6), 450);
+  assert.equal(playsEarned(9, false), 0); assert.equal(playsEarned(10, false), 1); assert.equal(playsEarned(55, false), 3); assert.equal(playsEarned(0, true), 99);
+});
