@@ -303,8 +303,3 @@ export const DEFAULT_PACKAGES = [
 // =====================================================================
 export const REFERRAL_REWARD = 50;
 
-// =====================================================================
-// Break game (Stag Run): earned, not free. 1 round per 3 leads called today, max 5 a day.
-// =====================================================================
-export const GAME = { callsPerPlay: 3, maxPlays: 5 };
-export const playsEarned = (callsToday, isAdmin) => (isAdmin ? 99 : Math.min(GAME.maxPlays, Math.floor((callsToday || 0) / GAME.callsPerPlay)));

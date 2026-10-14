@@ -71,8 +71,7 @@ service cloud.firestore {
         && (!('commissionPct' in request.resource.data)
             || (request.resource.data.commissionPct is number && request.resource.data.commissionPct >= 0 && request.resource.data.commissionPct <= 100))
         && (!('brandLink' in request.resource.data) || (request.resource.data.brandLink is string && request.resource.data.brandLink.size() <= 200))
-        && (!('brandPhone' in request.resource.data) || (request.resource.data.brandPhone is string && request.resource.data.brandPhone.size() <= 30))
-        && (!('gamesOn' in request.resource.data) || request.resource.data.gamesOn is bool);
+        && (!('brandPhone' in request.resource.data) || (request.resource.data.brandPhone is string && request.resource.data.brandPhone.size() <= 30));
     }
     // Google Maps data connection (Apify token): only signed-in team members can read it
     match /settings/integrations {
@@ -300,29 +299,6 @@ service cloud.firestore {
         && shortString(request.resource.data.page, 40)
         && request.resource.data.visible is bool
         && request.resource.data.at == request.time;
-    }
-    // Break game: plays are earned (1 per 3 leads called today, max 5/day); admin plays freely.
-    // gameScores/{day}_{uid}: starting a round adds 1 play; finishing only raises the best score.
-    match /gameScores/{id} {
-      function g() { return request.resource.data; }
-      function callsToday() {
-        let st = /databases/$(database)/documents/stats/$(perthToday() + '_' + request.auth.uid);
-        return exists(st) ? get(st).data.calls : 0;
-      }
-      function shapeOk() {
-        return id == perthToday() + '_' + request.auth.uid
-          && g().keys().hasOnly(['uid', 'name', 'day', 'week', 'plays', 'best', 'at'])
-          && g().uid == request.auth.uid && g().name == profile().name
-          && g().day == perthToday() && g().week == perthWeek()
-          && g().best is int && g().best >= 0 && g().best <= 5000
-          && g().plays is int && g().at == request.time
-          && (isAdmin() || (g().plays <= 5 && g().plays * 3 <= callsToday()));
-      }
-      allow read: if isActive();
-      allow create: if isActive() && shapeOk() && g().plays == 1 && g().best == 0;
-      allow update: if isActive() && shapeOk()
-        && ((g().plays == resource.data.plays + 1 && g().best == resource.data.best)
-            || (g().plays == resource.data.plays && g().best >= resource.data.best));
     }
     // Team chat: everyone active reads and posts as themselves (name/role must match their profile); admin can delete
     match /messages/{id} {

@@ -93,30 +93,3 @@ test("old website scoring", () => {
   assert.equal(scoreSite({ quick: quickSignals("http://old.com.au") }).score, 20);
   assert.equal(siteKey("https://www.Old-Site.com.au/page"), "old-site.com.au");
 });
-
-import { playsEarned } from "../src/extras.js";
-import { newGame, step, jump, gameScore, GAME_MAX_SECS } from "../src/game.js";
-test("Stag Run engine", () => {
-  assert.equal(playsEarned(2, false), 0); assert.equal(playsEarned(3, false), 1); assert.equal(playsEarned(14, false), 4); assert.equal(playsEarned(99, false), 5); assert.equal(playsEarned(0, true), 99);
-  // standing still: you crash into the first block
-  let g = newGame(() => 0.5);
-  for (let i = 0; i < 400 && !g.over; i++) step(g, 1 / 60);
-  assert.ok(g.over && g.crashed, "crashes without jumping");
-  // jump physics: leaves the ground and lands again
-  g = newGame(() => 0.5); const y0 = g.y; jump(g); step(g, 0.1); assert.ok(g.y < y0); for (let i = 0; i < 60; i++) step(g, 1 / 60); assert.equal(g.y, y0);
-  // double jump allowed, triple not
-  g = newGame(); jump(g); jump(g); const vy = g.vy; jump(g); assert.equal(g.vy, vy);
-  // a perfect bot survives until the time limit and the score is capped
-  g = newGame(() => 0.5); g.obstacles = []; const bot = (gg) => { gg.obstacles = []; };
-  while (!g.over) { bot(g); step(g, 0.05); }
-  assert.ok(!g.crashed && g.t >= GAME_MAX_SECS, "round ends at the time limit");
-  assert.ok(gameScore(g) > 0 && gameScore(g) <= 5000);
-});
-test("Stag Run plays the same on phones", () => {
-  const g = newGame(() => 0.5, 300);
-  assert.equal(g.W, 300);
-  while (!g.over) { g.obstacles = []; step(g, 0.05); }
-  const wide = newGame(() => 0.5, 720);
-  while (!wide.over) { wide.obstacles = []; step(wide, 0.05); }
-  assert.ok(Math.abs(gameScore(g) - gameScore(wide)) / gameScore(wide) < 0.35, `similar scores (${gameScore(g)} vs ${gameScore(wide)})`);
-});

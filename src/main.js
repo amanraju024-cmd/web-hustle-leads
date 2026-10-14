@@ -1,12 +1,11 @@
 // AR Methods Leads — app shell, routing and screens.
 import * as D from "./data.js";
-import { newGame, step as gameStep, jump as gameJump, draw as gameDraw, gameScore, GAME_MAX_SECS } from "./game.js";
 import { quickSignals, pageSpeed, scoreSite, siteKey, oldLabel, OLD_MIN, SetupError, CheckQuotaError } from "./oldsite.js";
 import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE, findPlaceForReview, reviewLink, leadKey } from "./search.js";
 import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
-  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, GAME, playsEarned, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
+  commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -163,7 +162,7 @@ function startCelebrations() {
 // Presence: a heartbeat every minute while the app is open and on screen
 // =====================================================================
 const PAGE_LABELS = { home: "Home", find: "Finding leads", leads: "My leads", callmode: "In call mode 📞", board: "Leaderboard",
-  chat: "Team chat", reviews: "Review cards", lockin: "Can't be bothered", account: "Account", game: "Break game 🎮" };
+  chat: "Team chat", reviews: "Review cards", lockin: "Can't be bothered", account: "Account" };
 let presenceTimer = null, presencePage = "home", presenceSent = 0;
 const presenceVisible = () => document.visibilityState === "visible";
 function beat(force) {
@@ -352,7 +351,7 @@ async function route() {
   state.routeId = (state.routeId || 0) + 1;
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
-    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews, chat: screenChat, game: screenGame,
+    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews, chat: screenChat,
     admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand, care: screenCare, packages: screenPackages, referrals: screenReferrals,
   };
   const adminOnly = ["admin", "worker", "pool", "team", "report", "brand", "care", "packages", "referrals"];
@@ -510,7 +509,6 @@ D.onAuthStateChanged(D.auth, async (user) => {
     const goal = team?.dailyGoal || 30;
     const brand = { brandLink: team?.brandLink ?? BRAND_LINK, brandPhone: team?.brandPhone ?? BRAND_PHONE };
     state.brand = brand;
-    state.gamesOn = team?.gamesOn !== false;
     const changed = !boot?.me || boot.me.role !== me.role || boot.me.name !== me.name || boot.goal !== goal || boot.googleToken !== googleToken;
     saveBoot(user.uid, { me, goal, googleToken, brand });
     Object.assign(state, { me, goal, googleToken });
@@ -585,15 +583,6 @@ async function screenHome() {
         <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${state.goal}" aria-valuenow="${t.calls}"><span style="width:${pct}%"></span></div>
         <p class="muted">${t.calls >= state.goal ? "Goal smashed. Keep going." : `${state.goal - t.calls} more to hit today's goal.`}</p>
       </section>
-      ${state.gamesOn !== false ? (() => {
-        const earned = playsEarned(t.calls, isAdmin());
-        const toNext = GAME.callsPerPlay - (t.calls % GAME.callsPerPlay);
-        return `<a class="card game-card ${earned ? "ready" : "locked"}" href="#game">
-          <span class="game-ico" aria-hidden="true">🎮</span>
-          <span><b>Break game: Stag Run</b>
-          <small>${isAdmin() ? "Admin: unlimited rounds" : earned ? `Round${earned === 1 ? "" : "s"} earned today: ${earned}. Every ${GAME.callsPerPlay} calls earns another.` : `Call ${toNext} more lead${toNext === 1 ? "" : "s"} to unlock a round`}</small></span>
-          <span class="game-go">${earned ? "Play" : "🔒"}</span></a>`;
-      })() : ""}
       <section class="tiles">
         <div class="tile"><span>Points today</span><b class="num">${t.points}</b></div>
         <div class="tile"><span>Rank today</span><b class="num">${rank >= 0 ? `${MEDALS[rank] || "#" + (rank + 1)}` : "—"}</b></div>
@@ -960,12 +949,12 @@ function drawMyLeads() {
     return;
   }
   const groups = {
-    active: (l) => !["Not interested", "Won"].includes(l.status),
+    active: (l) => needsCallToday(l, now),
     New: (l) => l.status === "New", "Call back": (l) => l.status === "Call back", Interested: (l) => l.status === "Interested",
     "No answer": (l) => l.status === "No answer", Won: (l) => l.status === "Won", "Not interested": (l) => l.status === "Not interested",
     all: () => true,
   };
-  const label = { active: "To work", all: "All" };
+  const label = { active: "To call today", all: "All" };
   const shown = leads.filter(groups[state.leadFilter] || groups.active).sort((a, b) => {
     const ad = a.status === "Call back" && toDate(a.callbackAt), bd = b.status === "Call back" && toDate(b.callbackAt);
     if (ad && bd) return ad - bd;
@@ -980,8 +969,9 @@ function drawMyLeads() {
     <div class="toolbar"><button class="ghost small" data-addref>🤝 Add a referral</button></div>
     <div class="chips">${Object.keys(groups).map((k) =>
       `<button class="chip ${state.leadFilter === k ? "on" : ""}" data-lf="${esc(k)}">${esc(label[k] || k)} (${leads.filter(groups[k]).length})</button>`).join("")}</div>
+    ${(state.leadFilter || "active") === "active" ? `<p class="muted small">New leads, call-backs due today, and No answer leads you last tried ${RETRY_DAYS}+ days ago. Interested leads are in their own tab.</p>` : ""}
     <div class="list">${shown.length ? shown.map((l) => myLeadCard(l, now)).join("")
-      : `<div class="empty">${leads.length ? "No leads in this group." : `No leads yet. <a href="#find">Find and claim some</a>.`}</div>`}</div>`;
+      : `<div class="empty">${!leads.length ? `No leads yet. <a href="#find">Find and claim some</a>.` : (state.leadFilter || "active") === "active" ? `Nothing left to call today 🎉 <a href="#find">Find new leads</a> to keep going.` : "No leads in this group."}</div>`}</div>`;
   body.querySelectorAll("[data-lf]").forEach((b) => b.addEventListener("click", () => { state.leadFilter = b.dataset.lf; drawMyLeads(); }));
   body.querySelector("[data-addref]")?.addEventListener("click", () => showReferralForm());
   body.querySelector("[data-callmode]")?.addEventListener("click", () => { state.callMode = true; state.callDone = new Set(); setPresencePage("callmode"); window.scrollTo(0, 0); drawMyLeads(); });
@@ -1023,14 +1013,28 @@ function scoreChip(l) {
 }
 
 // Call mode: one lead at a time, next one comes up as soon as you log the call
+// "To call today": new leads, call-backs due today (or overdue), and No answer leads last tried 3+ days ago.
+// Interested leads live in their own tab and Home's follow-ups; future call-backs show up on the day.
+const RETRY_DAYS = 3;
+function needsCallToday(l, now = new Date()) {
+  const today = perthDay();
+  if (l.status === "New") return true;
+  if (l.status === "Call back") {
+    const at = toDate(l.callbackAt);
+    return !at || at < new Date(`${addDays(today, 1)}T00:00:00+08:00`);
+  }
+  if (l.status === "No answer") {
+    const last = toDate(l.lastCalledAt);
+    return !last || perthDay(last) <= addDays(today, -RETRY_DAYS);
+  }
+  return false;
+}
 function callQueue(leads) {
   const now = new Date();
-  const today = perthDay();
   const done = state.callDone || new Set();
-  const due = (l) => l.status === "Call back" && toDate(l.callbackAt) && toDate(l.callbackAt) <= now;
-  const calledToday = (l) => l.lastCalledAt && perthDay(toDate(l.lastCalledAt)) === today;
+  const due = (l) => l.status === "Call back" && (!toDate(l.callbackAt) || toDate(l.callbackAt) <= now);
   const rank = (l) => (due(l) ? 0 : l.status === "New" ? 1 : 2);
-  return leads.filter((l) => !done.has(l.id) && l.phone && (due(l) || l.status === "New" || (l.status === "No answer" && !calledToday(l))))
+  return leads.filter((l) => !done.has(l.id) && l.phone && needsCallToday(l, now) && (l.status !== "Call back" || due(l)))
     .sort((a, b) => rank(a) - rank(b) || leadScore(b) - leadScore(a));
 }
 
@@ -1647,21 +1651,11 @@ async function screenTeam() {
       <div class="inline wide"><input id="gToken" type="password" placeholder="${state.googleToken ? "Saved. Paste a new one to replace it" : "apify_api_..."}" spellcheck="false">
         <button class="primary" type="submit">Save</button></div>
     </form>
-    <section class="card">
-      <h2>Break game</h2>
-      <p class="muted small">Stag Run: workers earn a round for every ${GAME.callsPerPlay} leads they call (max ${GAME.maxPlays} a day). A round ends on a crash or after ${GAME_MAX_SECS} seconds. Switch it off any time.</p>
-      <label class="check"><input type="checkbox" id="gamesOn" ${state.gamesOn !== false ? "checked" : ""}> Break game on</label>
-    </section>
     <form class="card" id="goalForm">
       <h2>Daily call goal</h2>
       <div class="inline"><input id="goal" type="number" min="1" max="500" value="${state.goal}" aria-label="Daily call goal"><button class="primary" type="submit">Save</button></div>
     </form>
     <section class="card"><h2>Everyone</h2><div id="teamList"><div class="loading"><span class="spinner"></span></div></div></section>`;
-  $("#gamesOn").addEventListener("change", async (e) => {
-    const on = e.target.checked;
-    try { await D.setGamesOn(on); state.gamesOn = on; toast(on ? "Break game switched on" : "Break game switched off for everyone"); }
-    catch (err) { e.target.checked = !on; toast(D.authMessage(err), "bad"); }
-  });
   const drawList = async () => {
     const users = await D.listUsers();
     if (!$("#teamList")) return;
@@ -1764,111 +1758,6 @@ function roastFor(calls, goal, name) {
 // =====================================================================
 // Review cards: Google review links for NFC cards, plus the upsell
 // =====================================================================
-// =====================================================================
-// Break game: Objection Rush (earned rounds, 45 seconds, then back to calls)
-// =====================================================================
-async function screenGame() {
-  setTitle("Break game");
-  const rid = state.routeId;
-  const today = perthDay();
-  view().innerHTML = `<div class="game"><div class="loading"><span class="spinner"></span></div></div>`;
-  const [stats, mine, week] = await Promise.all([
-    D.getStatsFor(state.me.id).catch(() => []), D.getMyGame(state.me).catch(() => ({ plays: 0, best: 0 })), D.getGameWeek().catch(() => []),
-  ]);
-  if (rid !== state.routeId) return;
-  const calls = stats.find((r) => r.day === today)?.calls || 0;
-  const earned = playsEarned(calls, isAdmin());
-  const left = Math.max(0, earned - (mine.plays || 0));
-  const bestBy = new Map();
-  week.forEach((r) => { const cur = bestBy.get(r.uid); if (!cur || r.best > cur.best) bestBy.set(r.uid, r); });
-  const top = [...bestBy.values()].filter((r) => r.best > 0).sort((a, b) => b.best - a.best).slice(0, 5);
-  const toNext = GAME.callsPerPlay - (calls % GAME.callsPerPlay);
-  const box = view().querySelector(".game");
-  if (state.gamesOn === false) {
-    box.innerHTML = `<section class="game-intro"><span class="game-big" aria-hidden="true">🎮</span><h1 class="page">Break game is off</h1><p class="muted">Aman has switched the break game off for now.</p><a class="primary" href="#leads">Back to calls</a></section>`;
-    return;
-  }
-  box.innerHTML = `
-    <section class="game-intro">
-      <span class="game-big" aria-hidden="true">🎮</span>
-      <h1 class="page">Stag Run</h1>
-      <p class="muted">Tap (or press Space) to jump, tap again in the air to double jump. Dodge the blocks, grab the $ coins. It gets faster the longer you last. A round ends when you crash, or after ${GAME_MAX_SECS} seconds.</p>
-      <div class="game-plays">${isAdmin() ? "Admin: unlimited rounds" : `<b>${left}</b> round${left === 1 ? "" : "s"} left today · ${mine.plays || 0} played${earned < GAME.maxPlays ? ` · next round at ${calls + toNext} leads called` : ""}`}</div>
-      ${left > 0 ? `<button class="primary game-start" id="gameStart">Start round</button>`
-        : `<div class="game-locked">🔒 ${earned >= GAME.maxPlays ? `That's all ${GAME.maxPlays} rounds for today. Back to the phones!` : `Call ${toNext} more lead${toNext === 1 ? "" : "s"} to earn your next round.`}</div>
-           <a class="primary" href="#leads">Back to calls 📞</a>`}
-      ${mine.best ? `<p class="muted small">Your best today: <b>${mine.best}</b></p>` : ""}
-    </section>
-    ${top.length ? `<section class="card"><h2>This week's high scores</h2><ol class="game-top">${top.map((r) => `<li class="${r.uid === state.me.id ? "me" : ""}"><span>${esc(r.name)}</span><b>${r.best}</b></li>`).join("")}</ol></section>` : ""}`;
-  $("#gameStart")?.addEventListener("click", async (e) => {
-    await busy(e.currentTarget, "Starting", async () => {
-      try { await D.startGameRound(state.me); playRound(rid); }
-      catch (err) { toast(err?.code === "permission-denied" ? "No rounds left. Make more calls to earn one." : D.authMessage(err), "bad"); screenGame(); }
-    });
-  });
-}
-
-function playRound(rid) {
-  const box = view().querySelector(".game");
-  box.innerHTML = `
-    <section class="game-play">
-      <div class="game-hud"><span>Score <b id="gScore">0</b></span><span id="gCoins" class="game-streak">$ 0</span><span><b id="gTime">${GAME_MAX_SECS}</b>s</span></div>
-      <div class="runner-wrap" id="gWrap"><canvas id="gCanvas" aria-label="Stag Run game. Tap to jump."></canvas>
-        <div class="runner-hint" id="gHint">Tap to jump</div></div>
-    </section>`;
-  const canvas = $("#gCanvas"), wrap = $("#gWrap");
-  const ctx = canvas.getContext("2d");
-  const img = new Image(); img.src = "logo.png";
-  // taller play area on phones; the game world's width follows the screen's shape
-  const cssSize = () => { const w = wrap.clientWidth; return { w, h: Math.round(w < 600 ? Math.min(320, Math.max(230, w * 0.8)) : Math.max(220, w * 260 / 720)) }; };
-  const first = cssSize();
-  const g = newGame(Math.random, 260 * first.w / first.h);
-  const size = () => {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const { w, h } = cssSize();
-    canvas.width = w * dpr; canvas.height = h * dpr; canvas.style.height = h + "px";
-    return dpr;
-  };
-  let dpr = size();
-  const onResize = () => { dpr = size(); };
-  window.addEventListener("resize", onResize);
-  const tap = (e) => { e.preventDefault(); gameJump(g); $("#gHint")?.remove(); };
-  const key = (e) => { if (e.code === "Space" || e.code === "ArrowUp") tap(e); };
-  wrap.addEventListener("pointerdown", tap);
-  document.addEventListener("keydown", key);
-  const cleanup = () => { window.removeEventListener("resize", onResize); document.removeEventListener("keydown", key); };
-  let last = performance.now();
-  const frame = (now) => {
-    if (rid !== state.routeId) return cleanup();
-    const dt = (now - last) / 1000; last = now;
-    if (document.visibilityState === "visible") gameStep(g, dt);
-    gameDraw(ctx, g, img, canvas.width, canvas.height);
-    $("#gScore").textContent = gameScore(g);
-    $("#gCoins").textContent = `$ ${g.coins}`;
-    $("#gTime").textContent = Math.max(0, Math.ceil(GAME_MAX_SECS - g.t));
-    if (g.over) { cleanup(); setTimeout(() => finish(), g.crashed ? 700 : 0); return; }
-    requestAnimationFrame(frame);
-  };
-  requestAnimationFrame(frame);
-  const finish = async () => {
-    const score = gameScore(g);
-    let best = score;
-    try { best = await D.finishGameRound(state.me, score); } catch {}
-    if (rid !== state.routeId) return;
-    box.innerHTML = `
-      <section class="game-intro game-done">
-        <span class="game-big" aria-hidden="true">${score >= best && score > 0 ? "🏆" : g.crashed ? "💥" : "⏱️"}</span>
-        <h1 class="page">${score} points</h1>
-        <p class="muted">${g.crashed ? "Crashed" : "Time's up"} after ${Math.round(g.t)}s · ${g.coins} coin${g.coins === 1 ? "" : "s"}${score >= best && score > 0 ? " · new best today!" : ` · best today ${best}`}</p>
-        <p class="game-tip">Break's over. Every ${GAME.callsPerPlay} calls earns another round.</p>
-        <a class="primary game-start" href="#leads">Back to calls 📞</a>
-        <button class="linkbtn" id="gameAgain">See rounds left</button>
-      </section>`;
-    $("#gameAgain").addEventListener("click", () => screenGame());
-    if (score >= best && score > 0) confetti();
-  };
-}
-
 // =====================================================================
 // Referrals
 // =====================================================================

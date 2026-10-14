@@ -84,7 +84,7 @@ export const updateUser = (uid, fields) => updateDoc(doc(db, "users", uid), { ..
 export async function getTeamSettings() {
   const snap = await getDoc(doc(db, "settings", "team"));
   const d = snap.exists() ? snap.data() : {};
-  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10, brandLink: d.brandLink ?? BRAND_LINK, brandPhone: d.brandPhone ?? BRAND_PHONE, gamesOn: d.gamesOn !== false };
+  return { dailyGoal: d.dailyGoal || 30, commissionPct: d.commissionPct ?? 10, brandLink: d.brandLink ?? BRAND_LINK, brandPhone: d.brandPhone ?? BRAND_PHONE };
 }
 /** Brand details clients see (link + phone in texts and the website credit). Keeps the daily goal as is. */
 export async function saveBrand({ brandLink, brandPhone }) {
@@ -93,10 +93,6 @@ export async function saveBrand({ brandLink, brandPhone }) {
 }
 export const getDailyGoal = async () => (await getTeamSettings()).dailyGoal;
 export const saveTeamSettings = (dailyGoal) => setDoc(doc(db, "settings", "team"), { dailyGoal }, { merge: true });
-export async function setGamesOn(on) {
-  const { dailyGoal } = await getTeamSettings();
-  return setDoc(doc(db, "settings", "team"), { dailyGoal, gamesOn: on }, { merge: true });
-}
 export async function getGoogleToken() {
   const snap = await getDoc(doc(db, "settings", "integrations"));
   return snap.exists() ? snap.data().apifyToken || "" : "";
@@ -391,39 +387,6 @@ export function watchPresence(cb, onErr) {
     snap.forEach((d) => m.set(d.id, d.data({ serverTimestamps: "estimate" })));
     cb(m);
   }, onErr);
-}
-
-// ---------- break game ----------
-export async function getMyGame(me) {
-  const snap = await getDoc(doc(db, "gameScores", `${perthDay()}_${me.id}`));
-  return snap.exists() ? snap.data() : { plays: 0, best: 0 };
-}
-/** Uses one earned play. Throws if none are left (the rules check it too). */
-export async function startGameRound(me) {
-  const day = perthDay();
-  const ref = doc(db, "gameScores", `${day}_${me.id}`);
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const cur = snap.exists() ? snap.data() : null;
-    tx.set(ref, { uid: me.id, name: me.name, day, week: weekStart(day), plays: (cur?.plays || 0) + 1, best: cur?.best || 0, at: serverTimestamp() });
-  });
-}
-export async function finishGameRound(me, score) {
-  const day = perthDay();
-  const ref = doc(db, "gameScores", `${day}_${me.id}`);
-  let best = 0;
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists()) return;
-    const cur = snap.data();
-    best = Math.max(cur.best || 0, Math.max(0, Math.min(5000, Math.round(score))));
-    if (best !== cur.best) tx.set(ref, { ...cur, best, at: serverTimestamp() });
-  });
-  return best;
-}
-export async function getGameWeek() {
-  const snap = await getDocs(query(collection(db, "gameScores"), where("week", "==", weekStart(perthDay()))));
-  return snap.docs.map((d) => d.data());
 }
 
 // ---------- team chat ----------

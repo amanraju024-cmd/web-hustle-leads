@@ -320,44 +320,6 @@
   .objections { margin: 0; display: grid; gap: 8px; }
   .objections dt { font-weight: 700; }
   .objections dd { margin: 2px 0 0; color: var(--muted); }
-  /* ---------- break game ---------- */
-  .game-card { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; text-decoration: none; color: inherit; }
-  .game-card .game-ico { font-size: 28px; }
-  .game-card b { display: block; }
-  .game-card small { color: var(--muted); }
-  .game-card.ready { border-color: rgba(150,120,255,.45); background: radial-gradient(circle at 0 0, rgba(150,120,255,.16), transparent 70%), var(--surface); }
-  .game-card.locked { opacity: .75; }
-  .game-go { font-weight: 800; padding: 6px 14px; border-radius: 999px; background: rgba(150,120,255,.2); color: #d6c9ff; }
-  .game-intro { text-align: center; padding: 28px 18px; border-radius: 22px; border: 1px solid rgba(150,120,255,.35); margin-bottom: 16px;
-    background: radial-gradient(420px 200px at 50% 0%, rgba(150,120,255,.22), transparent 70%), linear-gradient(180deg, #13101c, #0c0a10); }
-  .game-big { font-size: 52px; display: block; }
-  .game-intro .page { margin: 6px 0; }
-  .game-intro p { max-width: 460px; margin: 6px auto; }
-  .game-plays { margin: 14px 0; color: var(--muted); }
-  .game-plays b { color: #d6c9ff; font-size: 20px; }
-  .game-start { min-width: 220px; font-size: 17px; padding: 14px 22px; margin: 6px 0; display: inline-block; }
-  .game-locked { margin: 12px auto; padding: 12px 14px; border-radius: 12px; background: rgba(0,0,0,.3); border: 1px solid var(--border); max-width: 420px; }
-  .game-tip { color: #d6c9ff; }
-  .game-top { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
-  .game-top li { padding: 6px 4px; }
-  .game-top li span { display: inline-block; min-width: 60%; }
-  .game-top li.me { color: #d6c9ff; font-weight: 700; }
-  .game-play { padding: 18px; border-radius: 22px; border: 1px solid rgba(150,120,255,.35); background: linear-gradient(180deg, #13101c, #0c0a10); }
-  .game-hud { display: flex; justify-content: space-between; align-items: center; font-size: 15px; color: var(--muted); }
-  .game-hud b { color: var(--text); font-size: 20px; font-family: var(--mono); }
-  .game-streak { color: #ffb36b; font-weight: 800; }
-  .game-timer { height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; margin: 10px 0 18px; }
-  .game-timer span { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff5c52, #f4c46a, #9b7bff); transition: width .1s linear; }
-  .runner-wrap { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid rgba(226,185,104,.3); touch-action: manipulation; user-select: none; -webkit-user-select: none; cursor: pointer; }
-  .runner-wrap canvas { display: block; width: 100%; }
-  .runner-hint { position: absolute; inset: auto 0 18px; text-align: center; font-weight: 800; color: #f6dca0; text-shadow: 0 2px 10px #000; pointer-events: none; animation: hint-pulse 1.2s ease-in-out infinite; }
-  @keyframes hint-pulse { 50% { opacity: .4; } }
-  .game-q { font: 800 clamp(22px, 5vw, 30px)/1.2 var(--sans); letter-spacing: -.02em; text-align: center; margin: 8px 0 18px; min-height: 2.4em; }
-  .game-opts { display: grid; gap: 10px; }
-  .game-opt { font: inherit; text-align: left; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border-strong); background: rgba(255,255,255,.04); color: var(--text); cursor: pointer; line-height: 1.35; }
-  .game-opt:hover { border-color: rgba(150,120,255,.6); }
-  .game-opt.good { border-color: var(--good); background: var(--good-bg); }
-  .game-opt.bad { border-color: var(--bad); background: var(--bad-bg); }
   /* ---------- old website finder (its own teal "redesign" look) ---------- */
   .find-modes { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); margin-bottom: 14px; }
   .find-mode { font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border-radius: 999px; border: 0; background: none; color: var(--muted); cursor: pointer; }
