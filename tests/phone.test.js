@@ -93,3 +93,7 @@ test("old website scoring", () => {
   assert.equal(scoreSite({ quick: quickSignals("http://old.com.au") }).score, 20);
   assert.equal(siteKey("https://www.Old-Site.com.au/page"), "old-site.com.au");
 });
+test("old website scoring: very old code (no doctype)", () => {
+  const r = scoreSite({ quick: quickSignals("https://old.com.au"), full: { mobile: false, speed: 60, https: true, noDoctype: true } });
+  assert.equal(r.score, 60); assert.ok(r.reasons.some((x) => x.startsWith("Very old code")));
+});

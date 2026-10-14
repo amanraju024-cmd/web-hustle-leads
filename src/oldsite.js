@@ -53,11 +53,14 @@ export async function pageSpeed(url, key, { timeoutMs = 70000 } = {}) {
   const lh = data.lighthouseResult || {};
   const a = lh.audits || {};
   const speed = lh.categories?.performance?.score != null ? Math.round(lh.categories.performance.score * 100) : null;
-  const mobile = a.viewport ? a.viewport.score !== 0 : null;
+  // Lighthouse 12 called it "viewport" (0/1); 13+ calls it "viewport-insight" (anything under 0.9 = not set up for phones)
+  const vp = a.viewport || a["viewport-insight"];
+  const mobile = vp && vp.score != null ? vp.score >= 0.9 : null;
+  const noDoctype = a.doctype ? a.doctype.score === 0 : false;
   const https = a["is-on-https"] ? a["is-on-https"].score !== 0 : null;
   const libs = a["js-libraries"]?.details?.items || [];
   const jq = libs.find((l) => /jquery/i.test(l.name || "") && /^1\./.test(String(l.version || "")));
-  return { down: false, mobile, speed, https, oldJquery: jq ? `jQuery ${jq.version}` : null };
+  return { down: false, mobile, speed, https, noDoctype, oldJquery: jq ? `jQuery ${jq.version}` : null };
 }
 
 /** 0–100: how outdated the site looks, with plain-English reasons. */
@@ -74,6 +77,7 @@ export function scoreSite({ quick, full }) {
     else if (full.speed < 50) { score += 10; reasons.push(`Slow on phones (${full.speed}/100)`); }
   }
   if (full?.oldJquery) { score += 10; reasons.push(`Old code (${full.oldJquery})`); }
+  if (full?.noDoctype) { score += 15; reasons.push("Very old code (built the 90s/2000s way)"); }
   return { score: Math.min(100, score), reasons };
 }
 

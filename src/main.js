@@ -2,7 +2,7 @@
 import * as D from "./data.js";
 import { quickSignals, pageSpeed, scoreSite, siteKey, oldLabel, OLD_MIN, SetupError, CheckQuotaError } from "./oldsite.js";
 import { TRADES, searchBusinesses, SearchError, findHiddenWebsites, GOOGLE_COVERAGE, findPlaceForReview, reviewLink, leadKey } from "./search.js";
-import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE } from "./config.js";
+import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE, PAGESPEED_KEY } from "./config.js";
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
   commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
@@ -789,7 +789,7 @@ async function startOldChecks(result) {
   const sites = result.leads.filter((l) => l.websiteKind === "website" && safeUrl(l.website));
   state.oldSetup = null;
   if (state.psiKey === undefined) state.psiKey = await D.getPageSpeedKey().catch(() => "");
-  let key = state.psiKey || firebaseApiKey();
+  let key = state.psiKey || PAGESPEED_KEY || firebaseApiKey();
   for (const l of sites) {
     const c = state.oldChecks.get(l.id);
     if (c?.status === "done") l.oldSite = { score: c.score, reasons: c.reasons, label: oldLabel(c.score) };

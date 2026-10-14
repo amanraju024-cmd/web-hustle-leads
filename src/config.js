@@ -21,6 +21,9 @@ export const GOOGLE_MAPS_KEY = "AIzaSyCYF9M16-yz9SgllqWeC51CTgdsNsGxnGU";
 export const BRAND_LINK = "https://www.instagram.com/ar.methods_/";
 export const BRAND_PHONE = "0493 523 482";
 
+// Google PageSpeed Insights key for the Old website finder (locked to armethods.web.app, free, no billing).
+export const PAGESPEED_KEY = "AIzaSyAvbuTvSLJoADQL6QFEna2GhXGvPV0EWso";
+
 // Optional TomTom Search API key (free tier, no card) for extra business coverage.
 // Leave empty to search OpenStreetMap only.
 export const TOMTOM_KEY = "";
