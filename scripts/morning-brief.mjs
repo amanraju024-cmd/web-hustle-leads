@@ -5,12 +5,14 @@
 //  - 🔊 saves the spoken version to briefPublic/{speakKey} for the iPhone Shortcut that reads it out loud
 //  - 📧 emails the report (Gmail, needs GMAIL_APP_PASSWORD secret)
 //  - 📋 saves it to Firestore (briefs/latest) for the Admin page
-// Settings live in Firestore settings/brief: { telegramUser, email, call, message, sendEmail, whatsapp, whatsappPhone, whatsappKey, speakKey }.
+//  - 👥 emails each worker their own progress (scripts/team-emails.mjs), weekdays only
+// Settings live in Firestore settings/brief: { telegramUser, email, call, message, sendEmail, whatsapp, whatsappPhone, whatsappKey, speakKey, teamEmails }.
 // DRY_RUN=1 prints everything instead of sending.
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { perthDay, addDays, weekStart, prettyDay } from "../src/util.js";
 import { commissionFor, careStats, REFERRAL_REWARD } from "../src/extras.js";
+import { buildWorkerEmails } from "./team-emails.mjs";
 
 const DRY = !!process.env.DRY_RUN;
 const PROJECT = process.env.FIREBASE_PROJECT || "armethods";
@@ -141,17 +143,35 @@ async function main() {
     await pub.doc(s.speakKey).set({ day: brief.day, say: brief.say, createdAt: FieldValue.serverTimestamp() });
     results.push("iphone: ready");
   }
-  // 📧 Email
+  // 📧 Email (to Aman, then each worker)
   const to = s.email || process.env.BRIEF_EMAIL || "amanraju024@gmail.com";
+  const from = process.env.GMAIL_ADDRESS || "amanraju024@gmail.com";
+  let mailer = null;
+  const mail = async (m) => {
+    if (!mailer) mailer = (await import("nodemailer")).default.createTransport({ service: "gmail", auth: { user: from, pass: process.env.GMAIL_APP_PASSWORD } });
+    return mailer.sendMail(m);
+  };
   if (s.sendEmail !== false && process.env.GMAIL_APP_PASSWORD) {
     if (DRY) results.push("email: (dry run)");
     else try {
-      const nodemailer = (await import("nodemailer")).default;
-      const t = nodemailer.createTransport({ service: "gmail", auth: { user: process.env.GMAIL_ADDRESS || "amanraju024@gmail.com", pass: process.env.GMAIL_APP_PASSWORD } });
-      await t.sendMail({ from: `AR Methods Brief <${process.env.GMAIL_ADDRESS || "amanraju024@gmail.com"}>`, to, subject: `☀️ Morning brief: ${brief.team.calls} calls, ${brief.team.won} won (${prettyDay(brief.day)})`, text: brief.text });
+      await mail({ from: `AR Methods Brief <${from}>`, to, subject: `☀️ Morning brief: ${brief.team.calls} calls, ${brief.team.won} won (${prettyDay(brief.day)})`, text: brief.text });
       results.push("email: ok");
     } catch (e) { results.push("email: failed " + e.message); }
   } else results.push(process.env.GMAIL_APP_PASSWORD ? "email: off" : "email: skipped (no GMAIL_APP_PASSWORD secret)");
+  // 👥 Each worker's progress email
+  if (s.teamEmails !== false) {
+    const emails = await buildWorkerEmails(db);
+    if (DRY) { for (const m of emails) console.log(`---- TO ${m.to} (${m.mood}) ----\n${m.subject}\n\n${m.text}`); if (emails.length) results.push(`team emails: ${emails.length} (dry run)`); }
+    else if (emails.length && !process.env.GMAIL_APP_PASSWORD) results.push("team emails: skipped (no GMAIL_APP_PASSWORD secret)");
+    else if (emails.length) {
+      let sent = 0; const bad = [];
+      for (const m of emails) {
+        try { await mail({ from: `Aman at AR Methods <${from}>`, replyTo: from, to: m.to, subject: m.subject, text: m.text, html: m.html }); sent++; }
+        catch (e) { bad.push(`${m.name}: ${e.message}`); }
+      }
+      results.push(`team emails: ${sent} sent` + (bad.length ? `, failed ${bad.join("; ")}` : ""));
+    }
+  }
   // 📋 Save for the Admin page
   const doc = { ...brief, results, createdAt: FieldValue.serverTimestamp() };
   if (!DRY) { await db.doc("briefs/latest").set(doc); await db.doc(`briefs/${brief.day}`).set(doc); }

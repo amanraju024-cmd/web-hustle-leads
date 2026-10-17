@@ -314,6 +314,7 @@ service cloud.firestore {
         && request.resource.data.get('message', true) is bool
         && request.resource.data.get('sendEmail', true) is bool
         && request.resource.data.get('whatsapp', true) is bool
+        && request.resource.data.get('teamEmails', true) is bool
         && shortString(request.resource.data.get('whatsappPhone', ''), 20)
         && shortString(request.resource.data.get('whatsappKey', ''), 40)
         && shortString(request.resource.data.get('speakKey', ''), 64);

@@ -475,6 +475,7 @@ test("iPhone spoken brief: fetchable by its secret id, never listable or writabl
   await assertFails(getDocs(collection(anon, "briefPublic")));
   await assertFails(setDoc(doc(anon, "briefPublic/x"), { say: "hacked" }));
   await assertFails(setDoc(doc(as("owner"), "briefPublic/x"), { say: "hacked" }));
-  await assertSucceeds(setDoc(doc(as("owner"), "settings/brief"), { whatsapp: true, whatsappPhone: "0493 523 482", whatsappKey: "123456", speakKey: "a".repeat(48) }));
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/brief"), { whatsapp: true, whatsappPhone: "0493 523 482", whatsappKey: "123456", speakKey: "a".repeat(48), teamEmails: false }));
+  await assertFails(setDoc(doc(as("owner"), "settings/brief"), { teamEmails: "yes" }));
   await assertFails(setDoc(doc(as("owner"), "settings/brief"), { speakKey: "a".repeat(80) }));
 });

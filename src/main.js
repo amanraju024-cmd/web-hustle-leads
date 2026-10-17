@@ -1808,6 +1808,9 @@ async function screenTeam() {
         <label class="check"><input type="checkbox" id="bCall" checked> 📞 Telegram call</label>
         <label class="check"><input type="checkbox" id="bMsg" checked> 💬 Telegram message</label>
       </div>
+      <h3>👥 Team progress emails</h3>
+      <label class="check"><input type="checkbox" id="bTeam" checked> Email each worker their progress every weekday morning</label>
+      <p class="muted small">Tue–Fri: their calls yesterday vs the goal, rank, commission, and who to call back today. Monday: last week's recap. Praise when they hit the goal, a nudge when they fall behind, and a check-in if they go quiet for 3+ days. Uses the same Gmail app password.</p>
       <p class="muted small">The brief also shows at the top of Admin with a ▶ Listen button.</p>
       <button type="submit" class="primary">Save</button>
     </form>
@@ -1822,7 +1825,7 @@ async function screenTeam() {
     if (!$("#briefForm") || briefTouched) return;
     $("#bUser").value = b.telegramUser || ""; if (b.telegramUser) $("#tgBox").open = true; $("#bEmail").value = b.email || "";
     $("#bCall").checked = b.call !== false; $("#bMsg").checked = b.message !== false; $("#bMail").checked = b.sendEmail !== false;
-    $("#bWa").checked = b.whatsapp !== false; $("#bWaPhone").value = b.whatsappPhone || ""; $("#bWaKey").value = b.whatsappKey || "";
+    $("#bWa").checked = b.whatsapp !== false; $("#bTeam").checked = b.teamEmails !== false; $("#bWaPhone").value = b.whatsappPhone || ""; $("#bWaKey").value = b.whatsappKey || "";
     briefSpeakKey = b.speakKey || ""; drawSpeak();
   }).catch(() => {});
   let briefSpeakKey = "";
@@ -1856,7 +1859,7 @@ async function screenTeam() {
     if (u && !/^[A-Za-z0-9_]{5,32}$/.test(u)) return toast("Telegram usernames are 5–32 letters, numbers or _", "bad");
     if ($("#bWaPhone").value.trim() && !/^\+?[0-9 ]{8,16}$/.test($("#bWaPhone").value.trim())) return toast("Check the WhatsApp number", "bad");
     const data = { telegramUser: u ? "@" + u : "", email: $("#bEmail").value.trim(), call: $("#bCall").checked, message: $("#bMsg").checked, sendEmail: $("#bMail").checked,
-      whatsapp: $("#bWa").checked, whatsappPhone: $("#bWaPhone").value.trim(), whatsappKey: $("#bWaKey").value.trim(), speakKey: briefSpeakKey };
+      whatsapp: $("#bWa").checked, whatsappPhone: $("#bWaPhone").value.trim(), whatsappKey: $("#bWaKey").value.trim(), speakKey: briefSpeakKey, teamEmails: $("#bTeam").checked };
     await busy(e.submitter || $("#briefForm button[type=submit]"), "Saving", async () => {
       try { await D.saveBriefSettings(data); toast("Saved. Your next brief comes tomorrow at 7:30am."); }
       catch (err) { toast(D.authMessage(err), "bad"); }
