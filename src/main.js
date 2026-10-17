@@ -162,7 +162,7 @@ function startCelebrations() {
 // Presence: a heartbeat every minute while the app is open and on screen
 // =====================================================================
 const PAGE_LABELS = { home: "Home", find: "Finding leads", leads: "My leads", callmode: "In call mode 📞", board: "Leaderboard",
-  chat: "Team chat", reviews: "Review cards", lockin: "Can't be bothered", account: "Account" };
+  chat: "Team chat", reviews: "Review cards", start: "Reading Start here", lockin: "Can't be bothered", account: "Account" };
 let presenceTimer = null, presencePage = "home", presenceSent = 0;
 const presenceVisible = () => document.visibilityState === "visible";
 function beat(force) {
@@ -343,6 +343,88 @@ async function checkBadges() {
 }
 
 // =====================================================================
+// Start here: a step-by-step guide new workers see on their first login
+// =====================================================================
+const startKey = () => `arm_start_${state.me.id}`;
+function startProgress() {
+  try { return JSON.parse(localStorage.getItem(startKey()) || "null") || { seen: false, done: [] }; } catch { return { seen: false, done: [] }; }
+}
+function saveStart(p) { try { localStorage.setItem(startKey(), JSON.stringify(p)); } catch {} }
+const START_STEPS = () => [
+  { id: "job", icon: "💼", title: "What you're doing", body: `
+    <p>${esc(BRAND.name)} builds websites for local Perth businesses that don't have one, or have an old one. A website is about <b>$500</b>.</p>
+    <p>Your job: <b>find</b> those businesses in the app, <b>call</b> them, and get them interested. ${esc(BRAND.ceo)} takes care of building the website.</p>
+    <div class="start-pay"><b>How you get paid</b>
+      <ul><li><b>$100</b> for every website you sell for $500 or more</li><li><b>10%</b> of the price for anything under $500</li>
+      <li>It counts once the client has <b>paid in full</b>. You'll see it on Home as "pending" until then.</li></ul></div>` },
+  { id: "find", icon: "🔎", title: "Find businesses to call", body: `
+    <ol class="start-list"><li>Tap <b>Find leads</b> at the top.</li>
+      <li>Keep <b>🔎 No website</b> selected.</li>
+      <li>Type a <b>suburb</b> (e.g. Willetton) and pick a <b>business type</b> (e.g. Plumber), then tap <b>Search</b>.</li>
+      <li>Every business it finds goes into <b>My leads</b>. They're yours, nobody else on the team gets them.</li></ol>
+    <p class="muted small">Tip: one suburb and one business type at a time. Then try the next suburb over.</p>` },
+  { id: "call", icon: "📞", title: "Make your calls", body: `
+    <ol class="start-list"><li>Go to <b>My leads</b> and tap <b>📞 Start call mode</b>. It shows one business at a time, best ones first.</li>
+      <li>Tap the <b>phone number</b> to ring them.</li>
+      <li>Open <b>📜 Call script &amp; objections</b> on the card while you talk. It tells you what to say and how to answer "no".</li></ol>
+    <div class="start-script"><b>How a call goes</b>
+      <p>"Hi, is this the owner? My name's ${esc(state.me.name.split(" ")[0])} from ${esc(BRAND.name)}. I noticed you don't have a website. Most people Google a business before they call, so you're probably missing out on jobs…"</p>
+      <p class="muted small">Be friendly, keep it short, and ask questions. You're not begging, you're helping them get more customers.</p></div>` },
+  { id: "log", icon: "✅", title: "Tap what happened after every call", body: `
+    <p>After each call, tap one button on the card. This keeps your list clean and earns your points.</p>
+    <dl class="start-outcomes">
+      <dt><span class="status s-Noanswer">No answer</span></dt><dd>Didn't pick up. It comes back in 3 days.</dd>
+      <dt><span class="status s-Callback">Call back</span></dt><dd>They said "call me later". Pick a day and time, and it shows on Home when it's due.</dd>
+      <dt><span class="status s-Interested">Interested</span></dt><dd>They want to hear more. Follow up within 3 days so they don't go cold.</dd>
+      <dt><span class="status s-Notinterested">Not interested</span></dt><dd>They said no. Move on, it's normal.</dd>
+      <dt><span class="status s-Won">Won</span></dt><dd>They said yes! See the next step.</dd></dl>
+    <p class="muted small">Points: <b>1</b> per business called each day, <b>+3</b> when they're interested, <b>+10</b> for a sale. Calling the same business twice in a day doesn't add more.</p>` },
+  { id: "won", icon: "💰", title: "When someone says yes", body: `
+    <ol class="start-list"><li>Tap <b>Won</b>, pick the <b>package</b> they want and check the price.</li>
+      <li>Send ${esc(BRAND.ceo.split(" ")[0])} a message in <b>Chat</b> with the business name. ${esc(BRAND.ceo.split(" ")[0])} handles the website and payment.</li>
+      <li>Your commission shows on <b>Home</b>. It turns from pending to paid when the client pays in full.</li></ol>
+    <p class="muted small">If they're keen, offer review cards ($50 each) too. There's a line for it in the script.</p>` },
+  { id: "day", icon: "🗓️", title: "Your day", body: `
+    <ol class="start-list"><li>Open <b>Home</b> first: do your <b>call-backs due</b> and <b>follow-ups</b> before anything else. They're the easiest wins.</li>
+      <li>Then <b>Start call mode</b> for new businesses. Aim for <b>${state.goal} calls</b> a day.</li>
+      <li>Best times: <b>9–11:30am</b> and <b>2–4pm</b>. Avoid calling cafes and restaurants over lunch.</li>
+      <li>Stuck or got a question? Ask in <b>Chat</b>.</li></ol>
+    <p class="muted small">Most calls end in "no". That's normal for everyone. The people who keep dialling are the ones who make sales.</p>` },
+];
+
+async function screenStart() {
+  setTitle("Start here");
+  const prog = startProgress();
+  if (!prog.seen) { prog.seen = true; saveStart(prog); }
+  const steps = START_STEPS();
+  const draw = () => {
+    const done = new Set(startProgress().done);
+    const count = steps.filter((st) => done.has(st.id)).length;
+    const next = steps.find((st) => !done.has(st.id));
+    view().innerHTML = `
+      <h1 class="page">Start here</h1>
+      <p class="muted">Welcome to ${esc(BRAND.name)}, ${esc(state.me.name.split(" ")[0])}. This takes about 5 minutes. Read each step and tap <b>Got it</b>.</p>
+      <div class="start-progress"><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${steps.length}" aria-valuenow="${count}"><span style="width:${Math.round((count / steps.length) * 100)}%"></span></div>
+        <span class="muted small">${count} of ${steps.length} done</span></div>
+      ${steps.map((st, i) => `<section class="card start-step ${done.has(st.id) ? "done" : ""} ${next && next.id === st.id ? "current" : ""}" id="step-${st.id}">
+        <h2><span class="start-num">${done.has(st.id) ? "✓" : i + 1}</span>${st.icon} ${esc(st.title)}</h2>
+        <div class="start-body">${st.body}</div>
+        ${done.has(st.id) ? "" : `<button class="primary" data-got="${st.id}">Got it</button>`}
+      </section>`).join("")}
+      ${count === steps.length ? `<section class="card start-ready"><h2>🚀 You're ready</h2><p>Find your first businesses and start calling.</p>
+        <a class="primary wide-btn" href="#find">Find leads</a></section>` : ""}`;
+    view().querySelectorAll("[data-got]").forEach((b) => b.addEventListener("click", () => {
+      const p = startProgress();
+      if (!p.done.includes(b.dataset.got)) p.done.push(b.dataset.got);
+      saveStart(p); draw();
+      const nxt = view().querySelector(".start-step.current") || view().querySelector(".start-ready");
+      nxt?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
+  };
+  draw();
+}
+
+// =====================================================================
 // Routing
 // =====================================================================
 async function route() {
@@ -351,11 +433,13 @@ async function route() {
   state.routeId = (state.routeId || 0) + 1;
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
-    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews, chat: screenChat,
+    home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews, chat: screenChat, start: screenStart,
     admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand, care: screenCare, packages: screenPackages, referrals: screenReferrals,
   };
   const adminOnly = ["admin", "worker", "pool", "team", "report", "brand", "care", "packages", "referrals"];
   let fn = routes[name] || screenHome;
+  // new workers land on the Start here guide the first time they open the app
+  if (!isAdmin() && (name === "home" || !routes[name]) && !startProgress().seen) { location.replace("#start"); return; }
   if (adminOnly.includes(name) && !isAdmin()) fn = screenHome;
   markTab(adminOnly.includes(name) ? "admin" : name);
   setPresencePage(name);
@@ -577,7 +661,9 @@ async function screenHome() {
     const staleBefore = Date.now() - 3 * 864e5;
     const followUps = leads.filter((l) => l.status === "Interested" && (toDate(l.lastCalledAt)?.getTime() ?? 0) < staleBefore)
       .sort((a, b) => (toDate(a.lastCalledAt)?.getTime() ?? 0) - (toDate(b.lastCalledAt)?.getTime() ?? 0));
+    const startDone = startProgress().done.length, startTotal = START_STEPS().length;
     $("#homeBody").innerHTML = `
+      ${!isAdmin() && startDone < startTotal ? `<a class="card start-card" href="#start"><span aria-hidden="true">📘</span><div><b>Start here</b><small>How the app works and how you get paid · ${startDone} of ${startTotal} done</small></div><span aria-hidden="true">›</span></a>` : ""}
       <section class="goal card">
         <div class="goal-head"><span>Today's calls</span><b class="num">${t.calls} / ${state.goal}</b></div>
         <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${state.goal}" aria-valuenow="${t.calls}"><span style="width:${pct}%"></span></div>
@@ -1251,6 +1337,7 @@ function screenAccount() {
       <p><b>${esc(state.me.name)}</b><br><span class="muted">${esc(state.me.email)} · ${isAdmin() ? "Admin" : "Worker"}</span></p>
       <button class="ghost" id="signOut">Sign out</button>
     </section>
+    <a class="card start-card" href="#start"><span aria-hidden="true">📘</span><div><b>How the app works</b><small>Finding businesses, calling, and how you get paid</small></div><span aria-hidden="true">›</span></a>
     <section class="card"><h2>Install the app</h2>${installHtml()}</section>
     <form class="card" id="pwForm">
       <h2>Change password</h2>
@@ -1676,6 +1763,8 @@ async function screenTeam() {
       <div class="inline wide"><input id="gToken" type="password" placeholder="${state.googleToken ? "Saved. Paste a new one to replace it" : "apify_api_..."}" spellcheck="false">
         <button class="primary" type="submit">Save</button></div>
     </form>
+    <section class="card"><h2>📘 New worker guide</h2><p class="muted small">New workers see a step-by-step <b>Start here</b> guide the first time they log in: how to find businesses, call, log results, and how they get paid. Just give them their login.</p>
+      <a class="ghost wide-btn" href="#start">Preview the guide</a></section>
     <form class="card" id="briefForm">
       <h2>☀️ Morning brief (7:30am)</h2>
       <p class="muted small">Every morning at 7:30 you get yesterday's numbers, who called, money owed and what's due today. Pick any of these, all free.</p>
