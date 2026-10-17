@@ -357,30 +357,45 @@ const START_STEPS = () => [
     <div class="start-pay"><b>How you get paid</b>
       <ul><li><b>$100</b> for every website you sell for $500 or more</li><li><b>10%</b> of the price for anything under $500</li>
       <li>It counts once the client has <b>paid in full</b>. You'll see it on Home as "pending" until then.</li></ul></div>` },
-  { id: "find", icon: "🔎", title: "Find businesses to call", body: `
-    <ol class="start-list"><li>Tap <b>Find leads</b> at the top.</li>
-      <li>Keep <b>🔎 No website</b> selected.</li>
-      <li>Type a <b>suburb</b> (e.g. Willetton) and pick a <b>business type</b> (e.g. Plumber), then tap <b>Search</b>.</li>
-      <li>Every business it finds goes into <b>My leads</b>. They're yours, nobody else on the team gets them.</li></ol>
-    <p class="muted small">Tip: one suburb and one business type at a time. Then try the next suburb over.</p>` },
-  { id: "call", icon: "📞", title: "Make your calls", body: `
-    <ol class="start-list"><li>Go to <b>My leads</b> and tap <b>📞 Start call mode</b>. It shows one business at a time, best ones first.</li>
-      <li>Tap the <b>phone number</b> to ring them.</li>
-      <li>Open <b>📜 Call script &amp; objections</b> on the card while you talk. It tells you what to say and how to answer "no".</li></ol>
-    <div class="start-script"><b>How a call goes</b>
+  { id: "find", icon: "🔎", title: "Search a suburb", body: `
+    <ol class="start-list"><li>Tap <b>Find leads</b> in the menu at the top.</li>
+      <li>Keep <b>🔎 No website</b> selected. These are businesses with no website, the ones we sell to.</li>
+      <li>In <b>Suburb</b>, type a suburb name, e.g. <i>Bibra Lake</i>.</li>
+      <li>In <b>Business type</b>, pick one, e.g. <i>Plumber</i>.</li>
+      <li>Tap <b>Search</b>. A list of businesses comes up.</li></ol>
+    <div class="start-tip">💡 <b>Pick a suburb that isn't common.</b> Big, popular suburbs have usually been searched by other workers already, so most businesses there are taken. Smaller suburbs, or ones further out, have more businesses nobody has called yet.</div>` },
+  { id: "claim", icon: "✋", title: "Claim the businesses you'll call", body: `
+    <p>Each business in the list has a button on the right. It looks like this:</p>
+    <div class="start-demo lead"><div class="lead-main"><h3>Smith's Plumbing</h3><p class="muted">Plumber · Bibra Lake · ★ 4.6 (31)</p><p class="row"><span class="phone">📞 (08) 9418 0000</span></p></div>
+      <div class="lead-act"><span class="primary small demo-btn">Claim</span></div></div>
+    <dl class="start-outcomes">
+      <dt><span class="primary small demo-btn">Claim</span></dt><dd><b>Tap it</b> to make the business yours. It moves into <b>My leads</b> and nobody else can call it.</dd>
+      <dt><span class="pill taken">Taken by Jess</span></dt><dd>Another worker already claimed it. <b>Skip it and don't call it.</b></dd>
+      <dt><span class="pill mine">Yours ✓</span></dt><dd>You've claimed it. It's waiting in My leads.</dd></dl>
+    <p>Claim about <b>20–30</b> businesses, enough for your calling session. If most say "Taken", try a different suburb.</p>
+    <p class="muted small">Only call businesses you've claimed. Not sure if one really has no website? Tap <b>Check Google</b> under its name first.</p>` },
+  { id: "call", icon: "📞", title: "Go to My leads and call", body: `
+    <ol class="start-list"><li>Tap <b>My leads</b> in the top menu. Every business you claimed is there.</li>
+      <li>Tap <b>📞 Start call mode</b> to go through them one at a time, or just scroll the list.</li>
+      <li>Tap the <b>phone number</b> on the card. That rings the business from your phone.
+        <div class="start-demo-inline"><span class="phone">📞 (08) 9418 0000</span></div></li>
+      <li>While it rings, open <b>📜 Call script &amp; objections</b> on the same card. It tells you what to say, and what to say back when they say no.</li>
+      <li>During the call, type anything useful into <b>Notes</b> (the owner's name, when they're free, what they said).</li></ol>
+    <div class="start-script"><b>How a call starts</b>
       <p>"Hi, is this the owner? My name's ${esc(state.me.name.split(" ")[0])} from ${esc(BRAND.name)}. I noticed you don't have a website. Most people Google a business before they call, so you're probably missing out on jobs…"</p>
       <p class="muted small">Be friendly, keep it short, and ask questions. You're not begging, you're helping them get more customers.</p></div>` },
-  { id: "log", icon: "✅", title: "Tap what happened after every call", body: `
-    <p>After each call, tap one button on the card. This keeps your list clean and earns your points.</p>
+  { id: "log", icon: "✅", title: "Log the status straight after the call", body: `
+    <p>As soon as you hang up, scroll down the same card to <b>Log this call as:</b> and tap what happened. <b>Do this for every call</b>, even when nobody answers. It's how your calls, points and pay get counted.</p>
+    <div class="start-demo-inline outcomes">${D.CALL_STATUSES.map((st) => `<span class="out o-${st.replace(/\s/g, "")} demo-btn">${esc(st)}</span>`).join("")}</div>
     <dl class="start-outcomes">
-      <dt><span class="status s-Noanswer">No answer</span></dt><dd>Didn't pick up. It comes back in 3 days.</dd>
-      <dt><span class="status s-Callback">Call back</span></dt><dd>They said "call me later". Pick a day and time, and it shows on Home when it's due.</dd>
-      <dt><span class="status s-Interested">Interested</span></dt><dd>They want to hear more. Follow up within 3 days so they don't go cold.</dd>
-      <dt><span class="status s-Notinterested">Not interested</span></dt><dd>They said no. Move on, it's normal.</dd>
-      <dt><span class="status s-Won">Won</span></dt><dd>They said yes! See the next step.</dd></dl>
-    <p class="muted small">Points: <b>1</b> per business called each day, <b>+3</b> when they're interested, <b>+10</b> for a sale. Calling the same business twice in a day doesn't add more.</p>` },
+      <dt><span class="status s-Noanswer">No answer</span></dt><dd>Didn't pick up. It comes back for you to try again in 3 days.</dd>
+      <dt><span class="status s-Callback">Call back</span></dt><dd>They said "call me later". Tap it, <b>pick the day and time</b> they said, then tap <b>Call back again</b>. It shows on Home when it's due.</dd>
+      <dt><span class="status s-Interested">Interested</span></dt><dd>They want to hear more. Call or text them back within 3 days so they don't go cold.</dd>
+      <dt><span class="status s-Notinterested">Not interested</span></dt><dd>They said no. That's normal, move on to the next one.</dd>
+      <dt><span class="status s-Won">Won</span></dt><dd>They said yes! Tap it, <b>pick the package</b> (or type the price), then tap <b>Won again</b>.</dd></dl>
+    <p class="muted small">Points: <b>1</b> for each business you call in a day, <b>+3</b> when they're interested, <b>+10</b> for a sale. Calling the same business twice in one day doesn't add more.</p>` },
   { id: "won", icon: "💰", title: "When someone says yes", body: `
-    <ol class="start-list"><li>Tap <b>Won</b>, pick the <b>package</b> they want and check the price.</li>
+    <ol class="start-list"><li>Tap <b>Won</b>, pick the <b>package</b> they want, check the price, then tap <b>Won</b> again.</li>
       <li>Send ${esc(BRAND.ceo.split(" ")[0])} a message in <b>Chat</b> with the business name. ${esc(BRAND.ceo.split(" ")[0])} handles the website and payment.</li>
       <li>Your commission shows on <b>Home</b>. It turns from pending to paid when the client pays in full.</li></ol>
     <p class="muted small">If they're keen, offer review cards ($50 each) too. There's a line for it in the script.</p>` },
@@ -403,7 +418,7 @@ async function screenStart() {
     const next = steps.find((st) => !done.has(st.id));
     view().innerHTML = `
       <h1 class="page">Start here</h1>
-      <p class="muted">Welcome to ${esc(BRAND.name)}, ${esc(state.me.name.split(" ")[0])}. This takes about 5 minutes. Read each step and tap <b>Got it</b>.</p>
+      <p class="muted">Welcome to ${esc(BRAND.name)}, ${esc(state.me.name.split(" ")[0])}. This takes about 5 minutes. Read each step, then tap <b>Got it</b> to move to the next one.</p>
       <div class="start-progress"><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${steps.length}" aria-valuenow="${count}"><span style="width:${Math.round((count / steps.length) * 100)}%"></span></div>
         <span class="muted small">${count} of ${steps.length} done</span></div>
       ${steps.map((st, i) => `<section class="card start-step ${done.has(st.id) ? "done" : ""} ${next && next.id === st.id ? "current" : ""}" id="step-${st.id}">
