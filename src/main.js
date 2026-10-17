@@ -1858,6 +1858,7 @@ async function screenTeam() {
     const u = $("#bUser").value.trim().replace(/^@?/, "");
     if (u && !/^[A-Za-z0-9_]{5,32}$/.test(u)) return toast("Telegram usernames are 5–32 letters, numbers or _", "bad");
     if ($("#bWaPhone").value.trim() && !/^\+?[0-9 ]{8,16}$/.test($("#bWaPhone").value.trim())) return toast("Check the WhatsApp number", "bad");
+    if (/^(1234567|123456)$/.test($("#bWaKey").value.trim())) return toast("That's the example key. Use the API key CallMeBot sends you on WhatsApp.", "bad");
     const data = { telegramUser: u ? "@" + u : "", email: $("#bEmail").value.trim(), call: $("#bCall").checked, message: $("#bMsg").checked, sendEmail: $("#bMail").checked,
       whatsapp: $("#bWa").checked, whatsappPhone: $("#bWaPhone").value.trim(), whatsappKey: ($("#bWaKey").value.match(/\d{4,}/) || [$("#bWaKey").value.trim()])[0], speakKey: briefSpeakKey, teamEmails: $("#bTeam").checked };
     await busy(e.submitter || $("#briefForm button[type=submit]"), "Saving", async () => {
