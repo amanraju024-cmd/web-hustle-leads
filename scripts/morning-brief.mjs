@@ -115,16 +115,22 @@ async function main() {
   const s = settingsSnap.exists ? settingsSnap.data() : {};
   const brief = await buildBrief();
   const results = [];
+  // Each channel goes out once per day: a re-run (e.g. a test) skips anything already delivered
+  const prev = (await db.doc(`briefs/${brief.day}`).get()).data()?.results || [];
+  const sentBefore = (ch) => !process.env.FORCE && prev.some((r) => r.startsWith(`${ch}: ok`) || r.startsWith(`${ch}: already sent`) || (ch === "team emails" && /^team emails: [1-9]\d* sent/.test(r)));
+  const skip = (ch) => results.push(`${ch}: already sent today`);
   const user = String(process.env.TELEGRAM_USER || s.telegramUser || "").trim().replace(/^@?/, "@");
   if (DRY) { console.log("---- CALL ----\n" + brief.say + "\n---- MESSAGE ----\n" + brief.text); }
   // 📞 Telegram call (CallMeBot reads the text out loud)
-  if (user.length > 1 && s.call !== false) {
+  if (user.length > 1 && s.call !== false && sentBefore("call")) skip("call");
+  else if (user.length > 1 && s.call !== false) {
     const url = `https://api.callmebot.com/start.php?source=web&user=${encodeURIComponent(user)}&text=${encodeURIComponent(brief.say.slice(0, 900))}&lang=en-AU-Standard-B&rpt=2`;
     if (DRY) results.push("call: (dry run)");
     else try { await getJSON(url); results.push("call: ok"); } catch (e) { results.push("call: failed " + e.message); }
   }
   // 💬 Telegram message
-  if (user.length > 1 && s.message !== false) {
+  if (user.length > 1 && s.message !== false && sentBefore("message")) skip("message");
+  else if (user.length > 1 && s.message !== false) {
     const url = `https://api.callmebot.com/text.php?user=${encodeURIComponent(user)}&text=${encodeURIComponent(brief.text.slice(0, 3500))}`;
     if (DRY) results.push("message: (dry run)");
     else try { if (s.call !== false) await new Promise((r) => setTimeout(r, 20000)); await getJSON(url); results.push("message: ok"); } catch (e) { results.push("message: failed " + e.message); }
@@ -132,7 +138,8 @@ async function main() {
   // 🟢 WhatsApp message (CallMeBot replies 200 even on errors, so read what it says)
   const waPhone = String(s.whatsappPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "61");
   const waKey = (String(s.whatsappKey || "").match(/\d{4,}/) || [String(s.whatsappKey || "").trim()])[0]; // tolerate "Your APIKEY is 1234567"
-  if (s.whatsapp !== false && waPhone && waKey) {
+  if (s.whatsapp !== false && waPhone && waKey && sentBefore("whatsapp")) skip("whatsapp");
+  else if (s.whatsapp !== false && waPhone && waKey) {
     const url = `https://api.callmebot.com/whatsapp.php?phone=%2B${waPhone}&text=${encodeURIComponent(brief.text.slice(0, 3500))}&apikey=${encodeURIComponent(waKey)}`;
     if (DRY) results.push("whatsapp: (dry run)");
     else try {
@@ -157,7 +164,8 @@ async function main() {
     if (!mailer) mailer = (await import("nodemailer")).default.createTransport({ service: "gmail", auth: { user: from, pass: process.env.GMAIL_APP_PASSWORD } });
     return mailer.sendMail(m);
   };
-  if (s.sendEmail !== false && process.env.GMAIL_APP_PASSWORD) {
+  if (s.sendEmail !== false && process.env.GMAIL_APP_PASSWORD && sentBefore("email")) skip("email");
+  else if (s.sendEmail !== false && process.env.GMAIL_APP_PASSWORD) {
     if (DRY) results.push("email: (dry run)");
     else try {
       await mail({ from: `AR Methods Brief <${from}>`, to, subject: `☀️ Morning brief: ${brief.team.calls} calls, ${brief.team.won} won (${prettyDay(brief.day)})`, text: brief.text });
@@ -165,7 +173,8 @@ async function main() {
     } catch (e) { results.push("email: failed " + e.message); }
   } else results.push(process.env.GMAIL_APP_PASSWORD ? "email: off" : "email: skipped (no GMAIL_APP_PASSWORD secret)");
   // 👥 Each worker's progress email
-  if (s.teamEmails !== false) {
+  if (s.teamEmails !== false && sentBefore("team emails")) skip("team emails");
+  else if (s.teamEmails !== false) {
     const emails = await buildWorkerEmails(db);
     if (DRY) { for (const m of emails) console.log(`---- TO ${m.to} (${m.mood}) ----\n${m.subject}\n\n${m.text}`); if (emails.length) results.push(`team emails: ${emails.length} (dry run)`); }
     else if (emails.length && !process.env.GMAIL_APP_PASSWORD) results.push("team emails: skipped (no GMAIL_APP_PASSWORD secret)");
