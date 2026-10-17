@@ -13,7 +13,8 @@ import { DEFAULT_PACKAGES } from "../src/extras.js";
 const DRY = !!process.env.DRY_RUN;
 const PROJECT = process.env.FIREBASE_PROJECT || "armethods";
 const FROM = process.env.GMAIL_ADDRESS || "amanraju024@gmail.com";
-export const SITE = "https://armethods-perth.web.app";
+export const SITE = "https://armethods.com";
+const UNSUB_BASE = "https://armethods-perth.web.app"; // unsubscribe page (Firebase hosting, writes to Firestore)
 const PHONE = "0493 523 482";
 const INSTAGRAM = "https://www.instagram.com/ar.methods_/";
 const STEP_DAYS = [0, 2, 5, 10];
@@ -41,11 +42,11 @@ export function followUpEmail(step, lead, packages, unsubUrl) {
       "We build simple, mobile-friendly websites for Perth businesses, so when people Google you they can see what you do and call you in one tap.", "",
       ...pk, "",
       `You can see more here: ${SITE}`, "",
-      `Any questions, just reply to this email or call ${PHONE}.`] },
+      "Any questions, just reply to this email and we'll get straight back to you."] },
     { subject: `Quick question about ${biz}`, lines: [hi, "",
       `Just checking in. Did you get a chance to look at the website options I sent for ${biz}?`, "",
       "If something's holding you back (price, timing, not sure what you'd put on it), tell me and I'll sort it out. Most owners don't need to write anything, we put it together for you.", "",
-      `Reply here or call ${PHONE}.`] },
+      "Just reply to this email."] },
     { subject: `A few ideas for ${biz}`, lines: [hi, "",
       `I had a think about what would work best for ${biz}:`, "",
       "• A big \"Call now\" button, so people on their phone ring you straight away",
@@ -59,12 +60,12 @@ export function followUpEmail(step, lead, packages, unsubUrl) {
       "All the best with the business."] },
   ];
   const b = bodies[step];
-  const sig = [`${me}`, "AR Methods · Perth web design", `${PHONE} · ${SITE}`];
+  const sig = [`${me}`, "AR Methods · Web design, Perth WA", SITE];
   const text = [...b.lines, "", ...sig, "", `Don't want these emails? Unsubscribe: ${unsubUrl}`].join("\n");
   const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1d1a17;max-width:560px">
 ${b.lines.map((l) => (l ? `<p style="margin:0 0 4px">${esc(l).replace(/(https:\/\/[^\s]+)/g, '<a href="$1">$1</a>')}</p>` : `<div style="height:10px"></div>`)).join("\n")}
 <div style="height:14px"></div>
-<p style="margin:0"><b>${esc(me)}</b><br>AR Methods · Perth web design<br>${PHONE} · <a href="${SITE}">${SITE.replace("https://", "")}</a> · <a href="${INSTAGRAM}">Instagram</a></p>
+<p style="margin:0"><b>${esc(me)}</b><br>AR Methods · Web design, Perth WA<br><a href="tel:+61${PHONE.replace(/\D/g, "").replace(/^0/, "")}">Call us</a> · <a href="${SITE}">${SITE.replace("https://", "")}</a> · <a href="${INSTAGRAM}">Instagram</a></p>
 <p style="margin:22px 0 0;font-size:12px;color:#8a8178">You're getting this because you spoke with AR Methods about a website. <a href="${unsubUrl}" style="color:#8a8178">Unsubscribe</a></p></div>`;
   return { subject: b.subject, text, html, fromName: me === "The AR Methods team" ? "AR Methods" : `${me} at AR Methods` };
 }
@@ -72,7 +73,7 @@ ${b.lines.map((l) => (l ? `<p style="margin:0 0 4px">${esc(l).replace(/(https:\/
 export function enquiryReply(q) {
   const hi = q.name ? `Hi ${first(q.name)},` : "Hi,";
   const lines = [hi, "", `Thanks for getting in touch with AR Methods${q.business ? ` about a website for ${q.business}` : ""}. We've got your message and someone from the team will call you soon${q.phone ? ` on ${q.phone}` : ""}.`, "",
-    `If it's easier, you can call us any time on ${PHONE}, or just reply to this email.`, "", "The AR Methods team", "Web design · Perth WA", SITE];
+    "If you have any questions in the meantime, just reply to this email.", "", "The AR Methods team", "Web design · Perth WA", SITE];
   return { subject: "Thanks, we got your enquiry", text: lines.join("\n") };
 }
 
@@ -134,7 +135,7 @@ async function main() {
       if (step >= STEP_DAYS.length) { await stop("done"); continue; }
       if (now.getTime() < ms(f.startedAt) + STEP_DAYS[step] * 864e5) continue; // not due yet
       const token = f.token || randomBytes(18).toString("hex");
-      const unsubUrl = `${SITE}/unsubscribe.html?u=${encodeURIComponent(d.id)}&t=${token}`;
+      const unsubUrl = `${UNSUB_BASE}/unsubscribe.html?u=${encodeURIComponent(d.id)}&t=${token}`;
       const m = followUpEmail(step, l, packages, unsubUrl);
       try {
         if (!f.token && !DRY) await d.ref.update({ "followUp.token": token }); // unsubscribe link must work before the email lands
