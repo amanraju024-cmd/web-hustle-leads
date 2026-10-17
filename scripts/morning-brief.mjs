@@ -135,7 +135,8 @@ async function main() {
     const url = `https://api.callmebot.com/whatsapp.php?phone=%2B${waPhone}&text=${encodeURIComponent(brief.text.slice(0, 3500))}&apikey=${encodeURIComponent(s.whatsappKey)}`;
     if (DRY) results.push("whatsapp: (dry run)");
     else try {
-      const body = (await getJSON(url)).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+      const full = (await getJSON(url)).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      const body = full.includes("Text to send:") ? full.slice(-250) : full.slice(0, 250); // it echoes the whole message first
       if (/queued|sent|success/i.test(body) && !/error|invalid|not (been )?(allowed|activated|registered)/i.test(body)) results.push("whatsapp: ok");
       else results.push(`whatsapp: failed (to +${waPhone.slice(0, 4)}…${waPhone.slice(-3)}) CallMeBot said: ${body}`);
     } catch (e) { results.push("whatsapp: failed " + e.message); }
