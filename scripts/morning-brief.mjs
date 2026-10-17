@@ -129,12 +129,16 @@ async function main() {
     if (DRY) results.push("message: (dry run)");
     else try { if (s.call !== false) await new Promise((r) => setTimeout(r, 20000)); await getJSON(url); results.push("message: ok"); } catch (e) { results.push("message: failed " + e.message); }
   }
-  // 🟢 WhatsApp message
+  // 🟢 WhatsApp message (CallMeBot replies 200 even on errors, so read what it says)
   const waPhone = String(s.whatsappPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "61");
   if (s.whatsapp !== false && waPhone && s.whatsappKey) {
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${waPhone}&text=${encodeURIComponent(brief.text.slice(0, 3500))}&apikey=${encodeURIComponent(s.whatsappKey)}`;
+    const url = `https://api.callmebot.com/whatsapp.php?phone=%2B${waPhone}&text=${encodeURIComponent(brief.text.slice(0, 3500))}&apikey=${encodeURIComponent(s.whatsappKey)}`;
     if (DRY) results.push("whatsapp: (dry run)");
-    else try { await getJSON(url); results.push("whatsapp: ok"); } catch (e) { results.push("whatsapp: failed " + e.message); }
+    else try {
+      const body = (await getJSON(url)).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+      if (/queued|sent|success/i.test(body) && !/error|invalid|not (been )?(allowed|activated|registered)/i.test(body)) results.push("whatsapp: ok");
+      else results.push(`whatsapp: failed (to +${waPhone.slice(0, 4)}…${waPhone.slice(-3)}) CallMeBot said: ${body}`);
+    } catch (e) { results.push("whatsapp: failed " + e.message); }
   }
   // 🔊 iPhone Shortcut reads this one out loud
   if (s.speakKey && !DRY) {
