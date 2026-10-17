@@ -1789,7 +1789,7 @@ async function screenTeam() {
         <li>They reply with your <b>API key</b>. Paste it below with your mobile number.</li>
       </ol>
       <div class="inline wide"><input id="bWaPhone" inputmode="tel" maxlength="20" placeholder="0493 523 482" aria-label="WhatsApp number">
-        <input id="bWaKey" maxlength="40" placeholder="API key" spellcheck="false" aria-label="WhatsApp API key"></div>
+        <input id="bWaKey" maxlength="40" placeholder="API key (just the number)" spellcheck="false" aria-label="WhatsApp API key"></div>
       <h3>🔊 iPhone reads it out loud</h3>
       <div id="speakBox"></div>
       <h3>📧 Email</h3>
@@ -1859,7 +1859,7 @@ async function screenTeam() {
     if (u && !/^[A-Za-z0-9_]{5,32}$/.test(u)) return toast("Telegram usernames are 5–32 letters, numbers or _", "bad");
     if ($("#bWaPhone").value.trim() && !/^\+?[0-9 ]{8,16}$/.test($("#bWaPhone").value.trim())) return toast("Check the WhatsApp number", "bad");
     const data = { telegramUser: u ? "@" + u : "", email: $("#bEmail").value.trim(), call: $("#bCall").checked, message: $("#bMsg").checked, sendEmail: $("#bMail").checked,
-      whatsapp: $("#bWa").checked, whatsappPhone: $("#bWaPhone").value.trim(), whatsappKey: $("#bWaKey").value.trim(), speakKey: briefSpeakKey, teamEmails: $("#bTeam").checked };
+      whatsapp: $("#bWa").checked, whatsappPhone: $("#bWaPhone").value.trim(), whatsappKey: ($("#bWaKey").value.match(/\d{4,}/) || [$("#bWaKey").value.trim()])[0], speakKey: briefSpeakKey, teamEmails: $("#bTeam").checked };
     await busy(e.submitter || $("#briefForm button[type=submit]"), "Saving", async () => {
       try { await D.saveBriefSettings(data); toast("Saved. Your next brief comes tomorrow at 7:30am."); }
       catch (err) { toast(D.authMessage(err), "bad"); }

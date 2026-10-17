@@ -131,8 +131,9 @@ async function main() {
   }
   // 🟢 WhatsApp message (CallMeBot replies 200 even on errors, so read what it says)
   const waPhone = String(s.whatsappPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "61");
-  if (s.whatsapp !== false && waPhone && s.whatsappKey) {
-    const url = `https://api.callmebot.com/whatsapp.php?phone=%2B${waPhone}&text=${encodeURIComponent(brief.text.slice(0, 3500))}&apikey=${encodeURIComponent(s.whatsappKey)}`;
+  const waKey = (String(s.whatsappKey || "").match(/\d{4,}/) || [String(s.whatsappKey || "").trim()])[0]; // tolerate "Your APIKEY is 1234567"
+  if (s.whatsapp !== false && waPhone && waKey) {
+    const url = `https://api.callmebot.com/whatsapp.php?phone=%2B${waPhone}&text=${encodeURIComponent(brief.text.slice(0, 3500))}&apikey=${encodeURIComponent(waKey)}`;
     if (DRY) results.push("whatsapp: (dry run)");
     else try {
       const full = (await getJSON(url)).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
