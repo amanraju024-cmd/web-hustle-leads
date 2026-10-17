@@ -103,6 +103,18 @@
             }
           ]
         }
+      ],
+      "redirects": [
+        {
+          "source": "/",
+          "destination": "https://armethods.com",
+          "type": 301
+        },
+        {
+          "source": "/index.html",
+          "destination": "https://armethods.com",
+          "type": 301
+        }
       ]
     }
   ],
