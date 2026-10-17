@@ -33,7 +33,7 @@ export const businessHours = (now) => { const c = perthClock(now); return !["Sat
 export function followUpEmail(step, lead, packages, unsubUrl) {
   const biz = lead.name;
   const hi = lead.contactName ? `Hi ${first(lead.contactName)},` : "Hi there,";
-  const me = first(lead.followUp?.byName) || "Aman";
+  const me = first(lead.followUp?.byName) || "The AR Methods team";
   const pk = packages.map((p) => `• ${p.name}, ${money(p.price)}: ${(p.items || []).slice(0, 3).join(", ")}`);
   const bodies = [
     { subject: `Your website, ${biz}`, lines: [hi, "",
@@ -66,13 +66,13 @@ ${b.lines.map((l) => (l ? `<p style="margin:0 0 4px">${esc(l).replace(/(https:\/
 <div style="height:14px"></div>
 <p style="margin:0"><b>${esc(me)}</b><br>AR Methods · Perth web design<br>${PHONE} · <a href="${SITE}">${SITE.replace("https://", "")}</a> · <a href="${INSTAGRAM}">Instagram</a></p>
 <p style="margin:22px 0 0;font-size:12px;color:#8a8178">You're getting this because you spoke with AR Methods about a website. <a href="${unsubUrl}" style="color:#8a8178">Unsubscribe</a></p></div>`;
-  return { subject: b.subject, text, html, fromName: `${me} at AR Methods` };
+  return { subject: b.subject, text, html, fromName: me === "The AR Methods team" ? "AR Methods" : `${me} at AR Methods` };
 }
 
 export function enquiryReply(q) {
   const hi = q.name ? `Hi ${first(q.name)},` : "Hi,";
   const lines = [hi, "", `Thanks for getting in touch with AR Methods${q.business ? ` about a website for ${q.business}` : ""}. We've got your message and someone from the team will call you soon${q.phone ? ` on ${q.phone}` : ""}.`, "",
-    `If it's easier, you can call us any time on ${PHONE}, or just reply to this email.`, "", "Aman Raju", "AR Methods · Perth web design", SITE];
+    `If it's easier, you can call us any time on ${PHONE}, or just reply to this email.`, "", "The AR Methods team", "Web design · Perth WA", SITE];
   return { subject: "Thanks, we got your enquiry", text: lines.join("\n") };
 }
 
@@ -98,7 +98,7 @@ async function main() {
         text: [`${q.name}${q.business ? ` from ${q.business}` : ""}${q.suburb ? ` (${q.suburb})` : ""} wants a website.`, "",
           q.phone ? `Phone: ${q.phone}` : "", q.email ? `Email: ${q.email}` : "", q.package ? `Package: ${q.package}` : "", q.message ? `\n"${q.message}"` : "", "",
           "Add it to your leads: https://armethods.web.app/#admin"].filter((l) => l !== "").join("\n") });
-      if (q.email) await send({ to: q.email, fromName: "Aman at AR Methods", ...enquiryReply(q) });
+      if (q.email) await send({ to: q.email, fromName: "AR Methods", ...enquiryReply(q) });
       if (!DRY) await d.ref.update({ notified: true, notifiedAt: FieldValue.serverTimestamp() });
       log.push(`enquiry: ${q.business || q.name} handled`);
     } catch (e) { log.push(`enquiry: ${q.business || q.name} failed ${e.message}`); }

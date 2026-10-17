@@ -3,259 +3,396 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AR Methods · Websites for Perth businesses</title>
-<meta name="description" content="Simple, mobile-friendly websites for Perth businesses, from $500. We write it, build it and look after it. Call Aman on 0493 523 482.">
-<meta property="og:title" content="AR Methods · Websites for Perth businesses">
-<meta property="og:description" content="Mobile-friendly websites for Perth tradies, cafés, salons and local shops, from $500.">
+<title>AR Methods · Web design for Perth businesses</title>
+<meta name="description" content="AR Methods designs fast, mobile-friendly websites for Perth businesses from $500, plus tap-to-review NFC cards and stands. Call 0493 523 482.">
+<meta property="og:title" content="AR Methods · Web design for Perth businesses">
+<meta property="og:description" content="Websites that make Perth businesses look serious. From $500. NFC review cards and stands too.">
 <meta property="og:image" content="https://armethods-perth.web.app/apple-touch-icon.png">
-<meta name="theme-color" content="#2a0a10">
+<meta name="theme-color" content="#0c0708">
 <link rel="icon" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <style>
   @font-face { font-family: "Geist"; src: url("fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
   :root {
-    --ink: #1c1412; --ink-2: #4a3c37; --muted: #7c6b64; --line: #eadfd6;
-    --paper: #fbf7f2; --card: #ffffff; --wine: #6e0f1f; --wine-deep: #2a0a10; --gold: #e2b968; --gold-ink: #1a0e07;
+    --bg: #0c0708; --bg-2: #130b0d; --panel: #171012; --panel-2: #1e1416; --line: rgba(255,255,255,.08); --line-2: rgba(255,255,255,.14);
+    --text: #f6eee8; --soft: #cbbab0; --muted: #8f7d75; --wine: #9c1c30; --wine-2: #c2304a; --gold: #e2b968; --gold-2: #f6dca0; --gold-ink: #1a0e07;
     --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --r: 18px;
   }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
-  a { color: var(--wine); }
-  img { max-width: 100%; }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 22px; border-radius: 12px; font-weight: 600; text-decoration: none; border: 0; cursor: pointer; font: 600 16px var(--sans); }
-  .btn-gold { background: var(--gold); color: var(--gold-ink); }
-  .btn-gold:hover { filter: brightness(1.06); }
-  .btn-line { border: 1px solid rgba(245,237,230,.35); color: #f5ede6; }
-  .btn-wine { background: var(--wine); color: #fff; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: var(--gold); }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 20px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 22px; border-radius: 12px; text-decoration: none; border: 0; cursor: pointer; font: 600 15px var(--sans); transition: transform .15s ease, box-shadow .2s ease, background .2s ease; white-space: nowrap; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-gold { background: linear-gradient(180deg, var(--gold-2), var(--gold)); color: var(--gold-ink); box-shadow: 0 8px 30px -8px rgba(226,185,104,.55); }
+  .btn-ghost { background: rgba(255,255,255,.04); border: 1px solid var(--line-2); color: var(--text); }
+  .btn-ghost:hover { background: rgba(255,255,255,.08); }
+  .tag { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
+  .tag::before { content: ""; width: 18px; height: 1px; background: currentColor; }
+  h2 { font-size: clamp(30px, 4.2vw, 50px); line-height: 1.05; letter-spacing: -.03em; margin: 14px 0 16px; font-weight: 650; }
+  .lede { color: var(--soft); font-size: 18px; max-width: 38em; margin: 0; }
+  section { padding: 110px 0; position: relative; }
+  .grad { background: linear-gradient(100deg, var(--gold-2), var(--gold) 40%, #e88a6e); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
-  /* header + hero */
-  .hero { background: radial-gradient(900px 420px at 85% -10%, rgba(156,28,48,.55), transparent 70%), var(--wine-deep); color: #f5ede6; }
-  header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; }
-  .brand { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
-  .brand b { letter-spacing: .16em; font-size: 15px; white-space: nowrap; }
-  .brand small { white-space: nowrap; }
-  .call-top .short { display: none; }
-  .brand small { display: block; font-size: 10px; letter-spacing: .2em; color: #c9b6a6; }
-  nav.links { display: flex; gap: 22px; align-items: center; font-size: 15px; }
-  nav.links a { color: #e9dcd2; text-decoration: none; }
-  nav.links a:hover { color: #fff; }
-  .hero-body { padding: 56px 0 84px; display: grid; gap: 40px; grid-template-columns: 1.2fr .8fr; align-items: center; }
-  .hero h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.08; letter-spacing: -.02em; margin: 0 0 18px; font-weight: 700; }
-  .hero h1 em { font-style: normal; color: var(--gold); }
-  .hero p.lead { font-size: 18px; color: #e3d4c9; max-width: 34em; margin: 0 0 28px; }
-  .hero .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
-  .hero .meta { margin-top: 22px; font-size: 14px; color: #bfa999; }
-  .phone-mock { justify-self: center; width: 250px; aspect-ratio: 9/18; border-radius: 34px; background: #120709; border: 8px solid #3a1a20; box-shadow: 0 30px 60px rgba(0,0,0,.45); padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; }
-  .pm-bar { height: 10px; width: 60px; border-radius: 6px; background: #2b1418; align-self: center; margin-bottom: 6px; }
-  .pm-title { font-weight: 700; font-size: 17px; color: #fff; }
-  .pm-sub { font-size: 12px; color: #c9b6a6; }
-  .pm-stars { color: var(--gold); font-size: 13px; }
-  .pm-call { margin-top: 6px; background: var(--gold); color: var(--gold-ink); font-weight: 700; text-align: center; padding: 11px; border-radius: 10px; font-size: 14px; }
-  .pm-row { height: 9px; border-radius: 5px; background: #2b1418; }
-  .pm-row.short { width: 60%; }
-  .pm-img { flex: 1; border-radius: 12px; background: linear-gradient(135deg, #4a1820, #20090d); }
+  /* header */
+  header.top { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(12,7,8,.72); border-bottom: 1px solid var(--line); }
+  header.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 11px; color: var(--text); text-decoration: none; }
+  .brand b { letter-spacing: .2em; font-size: 14px; white-space: nowrap; }
+  nav.links { display: flex; align-items: center; gap: 26px; font-size: 14px; }
+  nav.links a { color: var(--soft); text-decoration: none; }
+  nav.links a:hover { color: var(--text); }
+  nav.links .btn { padding: 10px 16px; font-size: 14px; color: var(--gold-ink); }
 
-  section { padding: 76px 0; }
-  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--wine); margin: 0 0 10px; }
-  h2 { font-size: clamp(28px, 3.6vw, 38px); line-height: 1.15; letter-spacing: -.015em; margin: 0 0 14px; }
-  .intro { color: var(--ink-2); max-width: 40em; margin: 0 0 36px; font-size: 17px; }
+  /* hero */
+  .hero { padding: 90px 0 70px; overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: 0; background:
+      radial-gradient(600px 380px at 78% 18%, rgba(156,28,48,.45), transparent 70%),
+      radial-gradient(500px 300px at 10% 90%, rgba(226,185,104,.10), transparent 70%); pointer-events: none; }
+  .hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+      background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 64px 64px; mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%); }
+  .hero .wrap { position: relative; z-index: 1; display: grid; grid-template-columns: 1.05fr .95fr; gap: 40px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255,255,255,.03); font-size: 13px; color: var(--soft); }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: #5fd38d; box-shadow: 0 0 0 4px rgba(95,211,141,.15); }
+  .hero h1 { font-size: clamp(42px, 6.4vw, 78px); line-height: .98; letter-spacing: -.045em; margin: 22px 0 22px; font-weight: 700; }
+  .hero p.lede { font-size: 19px; }
+  .hero .ctas { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
+  .hero .facts { display: flex; gap: 28px; margin-top: 40px; flex-wrap: wrap; }
+  .hero .facts div { font-size: 13px; color: var(--muted); }
+  .hero .facts b { display: block; color: var(--text); font-size: 22px; letter-spacing: -.02em; }
 
-  .why { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-  .why div { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
-  .why b { display: block; font-size: 17px; margin-bottom: 6px; }
-  .why p { margin: 0; color: var(--ink-2); font-size: 15px; }
+  .stage { position: relative; height: 470px; }
+  .browser { position: absolute; right: 0; top: 10px; width: 92%; border-radius: 14px; background: #f7f3ee; box-shadow: 0 40px 90px -20px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06); overflow: hidden; transform: perspective(1400px) rotateY(-9deg) rotateX(3deg); }
+  .b-bar { height: 34px; background: #e9e2da; display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+  .b-bar i { width: 10px; height: 10px; border-radius: 50%; background: #d3c8bd; }
+  .b-bar span { margin-left: 12px; flex: 1; height: 18px; border-radius: 6px; background: #f7f3ee; font-size: 10px; color: #8b7d72; display: flex; align-items: center; padding-left: 8px; }
+  .b-hero { background: linear-gradient(135deg, #12304a, #1d4f6e); color: #fff; padding: 26px 24px 30px; }
+  .b-hero small { font-size: 10px; letter-spacing: .14em; opacity: .7; }
+  .b-hero h4 { margin: 6px 0 8px; font-size: 22px; line-height: 1.1; letter-spacing: -.02em; }
+  .b-hero p { margin: 0 0 14px; font-size: 11px; opacity: .8; max-width: 26em; }
+  .b-cta { display: inline-block; background: #ffb547; color: #1a1206; font-size: 11px; font-weight: 700; padding: 8px 12px; border-radius: 7px; }
+  .b-body { padding: 16px 24px 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .b-body div { background: #fff; border: 1px solid #ece4dc; border-radius: 9px; padding: 10px; font-size: 10px; color: #4b3f37; }
+  .b-body b { display: block; font-size: 11px; color: #1c1412; margin-bottom: 2px; }
+  .b-stars { color: #f2a71b; letter-spacing: 1px; }
+  .phone { position: absolute; left: 0; bottom: 0; width: 170px; aspect-ratio: 9/18.5; border-radius: 30px; background: #0a0607; border: 7px solid #2a1c1f; box-shadow: 0 30px 60px -10px rgba(0,0,0,.8); overflow: hidden; display: flex; flex-direction: column; }
+  .phone .ph { background: linear-gradient(160deg, #12304a, #1d4f6e); padding: 26px 12px 14px; color: #fff; }
+  .phone .ph b { font-size: 13px; display: block; }
+  .phone .ph span { font-size: 9px; opacity: .75; }
+  .phone .pb { flex: 1; background: #f7f3ee; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .phone .pb i { display: block; height: 7px; border-radius: 4px; background: #e3d9cf; }
+  .phone .pb i:nth-child(2) { width: 70%; }
+  .phone .call { margin-top: auto; background: #ffb547; color: #1a1206; text-align: center; font-weight: 700; font-size: 11px; border-radius: 8px; padding: 9px; }
+  .float-card { position: absolute; right: 18px; bottom: 6px; transform: rotate(-8deg); }
 
-  .packages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: stretch; }
-  .pkg { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 26px; display: flex; flex-direction: column; }
-  .pkg.pop { border: 2px solid var(--wine); position: relative; }
-  .pkg.pop::before { content: "Most popular"; position: absolute; top: -12px; left: 22px; background: var(--wine); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
-  .pkg h3 { margin: 0; font-size: 19px; }
-  .pkg .price { font-size: 38px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 2px; }
-  .pkg .once { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
-  .pkg ul { list-style: none; padding: 0; margin: 0 0 22px; flex: 1; }
-  .pkg li { padding: 7px 0 7px 26px; position: relative; border-top: 1px solid #f3ece6; font-size: 15px; }
-  .pkg li::before { content: "✓"; position: absolute; left: 2px; color: var(--wine); font-weight: 700; }
+  /* marquee */
+  .marquee { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg-2); overflow: hidden; padding: 18px 0; }
+  .marquee .track { display: flex; gap: 46px; width: max-content; animation: slide 38s linear infinite; }
+  .marquee span { font-size: 15px; color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 46px; }
+  .marquee span::after { content: "✦"; color: var(--wine-2); font-size: 11px; }
+  @keyframes slide { to { transform: translateX(-50%); } }
+
+  /* features */
+  .feat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-top: 50px; }
+  .feat div { background: var(--bg); padding: 30px 28px; transition: background .2s; }
+  .feat div:hover { background: var(--panel); }
+  .feat svg { width: 26px; height: 26px; color: var(--gold); margin-bottom: 18px; }
+  .feat b { display: block; font-size: 18px; letter-spacing: -.01em; margin-bottom: 6px; }
+  .feat p { margin: 0; color: var(--soft); font-size: 15px; }
+
+  /* packages */
+  .pk-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 50px; align-items: stretch; }
+  .pkg { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 30px; display: flex; flex-direction: column; position: relative; }
+  .pkg.pop { background: linear-gradient(180deg, #24131a, var(--panel)); border-color: rgba(226,185,104,.45); box-shadow: 0 30px 70px -30px rgba(156,28,48,.7); }
+  .pkg.pop::before { content: "Most popular"; position: absolute; top: 18px; right: 18px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--gold-ink); background: var(--gold); padding: 4px 10px; border-radius: 999px; }
+  .pkg h3 { margin: 0; font-size: 16px; color: var(--soft); font-weight: 600; }
+  .pkg .price { font-size: 50px; font-weight: 700; letter-spacing: -.04em; margin: 10px 0 0; }
+  .pkg .once { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  .pkg ul { list-style: none; padding: 0; margin: 0 0 26px; flex: 1; }
+  .pkg li { padding: 9px 0 9px 28px; position: relative; border-top: 1px solid var(--line); font-size: 15px; color: var(--soft); }
+  .pkg li::before { content: ""; position: absolute; left: 2px; top: 15px; width: 12px; height: 7px; border-left: 2px solid var(--gold); border-bottom: 2px solid var(--gold); transform: rotate(-45deg); }
   .pkg .btn { width: 100%; }
-
-  .care { margin-top: 26px; display: flex; gap: 20px; align-items: center; justify-content: space-between; background: #f4ebe2; border-radius: 16px; padding: 22px 26px; flex-wrap: wrap; }
+  .care { margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; border: 1px dashed var(--line-2); border-radius: var(--r); padding: 22px 28px; }
   .care b { font-size: 17px; }
-  .care p { margin: 4px 0 0; color: var(--ink-2); font-size: 15px; max-width: 46em; }
+  .care p { margin: 4px 0 0; color: var(--soft); font-size: 15px; max-width: 46em; }
 
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: s; }
-  .steps div { counter-increment: s; padding-top: 4px; }
-  .steps div::before { content: counter(s); display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--wine); color: #fff; font-weight: 700; margin-bottom: 12px; }
-  .steps b { display: block; font-size: 17px; margin-bottom: 4px; }
-  .steps p { margin: 0; color: var(--ink-2); font-size: 15px; }
+  /* NFC shop */
+  .shop-head { display: flex; justify-content: space-between; align-items: end; gap: 30px; flex-wrap: wrap; }
+  .shop { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 50px; }
+  .prod { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: flex; flex-direction: column; }
+  .prod .show { height: 170px; border-radius: 12px; background: radial-gradient(circle at 50% 40%, #2a1a1e, #120b0d); display: grid; place-items: center; margin-bottom: 16px; overflow: hidden; }
+  .prod h3 { margin: 0; font-size: 16px; }
+  .prod p { margin: 4px 0 12px; color: var(--muted); font-size: 13.5px; flex: 1; }
+  .prod .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .prod .cost { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  .swatches { display: flex; gap: 8px; }
+  .swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; outline: 1px solid var(--line-2); padding: 0; }
+  .swatches button[data-c="Black"] { background: #0d0d0d; }
+  .swatches button[data-c="White"] { background: #f4f1ec; }
+  .swatches button.on { border-color: var(--gold); outline-color: transparent; }
+  .qty { display: inline-flex; align-items: center; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+  .qty button { width: 34px; height: 36px; background: transparent; border: 0; color: var(--text); font-size: 18px; cursor: pointer; }
+  .qty button:hover { background: rgba(255,255,255,.06); }
+  .qty span { min-width: 26px; text-align: center; font-weight: 600; }
+  .prod .add { width: 100%; padding: 11px; }
+  .prod .add.done { background: #1f3a2a; color: #9be3b7; box-shadow: none; }
 
-  .extra { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 40px; }
-  .extra div { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
-  .extra b { font-size: 17px; }
-  .extra p { margin: 6px 0 0; color: var(--ink-2); font-size: 15px; }
+  /* NFC product mockups (pure CSS) */
+  .card { width: 168px; aspect-ratio: 85.6/54; border-radius: 10px; position: relative; padding: 12px 13px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 18px 30px -12px rgba(0,0,0,.8); transform: rotate(-6deg); }
+  .card.black { background: linear-gradient(140deg, #232323, #0b0b0b 60%); color: #fff; }
+  .card.white { background: linear-gradient(140deg, #ffffff, #e9e5df); color: #1a1a1a; }
+  .card.fb { background: linear-gradient(140deg, #3b82f6, #1858d6); color: #fff; }
+  .card.ig { background: linear-gradient(135deg, #feda75, #fa7e1e 30%, #d62976 60%, #962fbf 85%, #4f5bd5); color: #fff; }
+  .card small { font-size: 8px; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+  .card b { font-size: 12.5px; line-height: 1.15; letter-spacing: -.01em; }
+  .card .st { font-size: 11px; letter-spacing: 1px; color: #fbbc04; }
+  .card .nfc { position: absolute; right: 11px; top: 10px; width: 16px; height: 16px; opacity: .8; }
+  .stand { position: relative; width: 120px; height: 150px; display: grid; place-items: end center; }
+  .stand .plate { width: 104px; height: 128px; border-radius: 10px; padding: 12px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; transform: perspective(300px) rotateX(10deg); box-shadow: 0 18px 26px -10px rgba(0,0,0,.8); }
+  .stand .base { position: absolute; bottom: -4px; width: 120px; height: 14px; border-radius: 4px; }
+  .stand.black .plate { background: linear-gradient(160deg, #262626, #0b0b0b); color: #fff; }
+  .stand.black .base { background: #050505; }
+  .stand.white .plate { background: linear-gradient(160deg, #ffffff, #e6e1da); color: #1a1a1a; }
+  .stand.white .base { background: #cfc8bf; }
+  .stand b { font-size: 11px; line-height: 1.2; }
+  .stand .st { font-size: 10px; color: #fbbc04; letter-spacing: 1px; }
+  .stand .qr { width: 34px; height: 34px; border-radius: 4px; background:
+      conic-gradient(from 90deg at 30% 30%, currentColor 25%, transparent 0) 0 0/8px 8px; opacity: .55; }
 
-  .faq details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; }
-  .faq summary { cursor: pointer; font-weight: 600; font-size: 16px; }
-  .faq p { margin: 10px 0 0; color: var(--ink-2); }
+  .cart { position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 140%); z-index: 60; background: rgba(23,16,18,.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line-2); border-radius: 16px; padding: 10px 10px 10px 18px; display: flex; align-items: center; gap: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.6); transition: transform .3s ease; max-width: calc(100% - 24px); }
+  .cart.show { transform: translate(-50%, 0); }
+  .cart span { font-size: 14px; color: var(--soft); white-space: nowrap; }
+  .cart b { color: var(--text); }
 
-  .contact { background: var(--wine-deep); color: #f5ede6; }
-  .contact .eyebrow { color: var(--gold); }
-  .contact .intro { color: #d9c7bb; }
-  .contact-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 40px; }
-  .direct a { color: #fff; }
-  .direct .big { font-size: 26px; font-weight: 700; display: block; margin: 4px 0 16px; text-decoration: none; }
-  form.enquiry { background: #fff; color: var(--ink); border-radius: 18px; padding: 24px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
-  form.enquiry label { font-size: 13px; font-weight: 600; color: var(--ink-2); display: block; margin-bottom: 4px; }
-  form.enquiry input, form.enquiry select, form.enquiry textarea { width: 100%; font: 16px var(--sans); padding: 11px 12px; border: 1px solid #ddd0c5; border-radius: 10px; background: #fff; color: var(--ink); }
-  form.enquiry textarea { min-height: 96px; resize: vertical; }
+  /* process */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 50px; }
+  .step { border-top: 1px solid var(--line-2); padding-top: 22px; }
+  .step em { font-style: normal; font-size: 13px; color: var(--gold); font-weight: 600; letter-spacing: .1em; }
+  .step b { display: block; font-size: 22px; letter-spacing: -.02em; margin: 8px 0 8px; }
+  .step p { margin: 0; color: var(--soft); font-size: 15px; }
+
+  /* faq */
+  .faq-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 50px; }
+  .faq details { border-bottom: 1px solid var(--line); padding: 18px 0; }
+  .faq summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; display: flex; justify-content: space-between; gap: 20px; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; color: var(--gold); font-size: 22px; line-height: 1; transition: transform .2s; }
+  .faq details[open] summary::after { transform: rotate(45deg); }
+  .faq p { margin: 10px 0 0; color: var(--soft); }
+
+  /* contact */
+  .contact { background: linear-gradient(180deg, var(--bg), #1a0b10); }
+  .contact-box { border: 1px solid var(--line-2); border-radius: 26px; background: rgba(23,16,18,.7); padding: 46px; display: grid; grid-template-columns: .85fr 1.15fr; gap: 46px; position: relative; overflow: hidden; }
+  .contact-box::before { content: ""; position: absolute; width: 520px; height: 520px; left: -200px; top: -260px; background: radial-gradient(circle, rgba(156,28,48,.35), transparent 65%); pointer-events: none; }
+  .direct { position: relative; }
+  .direct .big { display: inline-block; font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: var(--text); text-decoration: none; margin: 26px 0 8px; }
+  .direct p { color: var(--soft); }
+  form.enquiry { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  form.enquiry label { font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--muted); display: block; margin-bottom: 6px; text-transform: uppercase; }
+  form.enquiry input, form.enquiry select, form.enquiry textarea { width: 100%; font: 16px var(--sans); padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: rgba(0,0,0,.25); color: var(--text); }
+  form.enquiry input:focus, form.enquiry select:focus, form.enquiry textarea:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(226,185,104,.15); }
+  form.enquiry select option { background: #1a1113; }
+  form.enquiry textarea { min-height: 110px; resize: vertical; }
   form.enquiry .full { grid-column: 1 / -1; }
   form.enquiry .hp { position: absolute; left: -9999px; }
-  form.enquiry .btn { width: 100%; }
+  form.enquiry .btn { width: 100%; padding: 15px; font-size: 16px; }
+  .order-box { grid-column: 1 / -1; border: 1px solid rgba(226,185,104,.35); background: rgba(226,185,104,.06); border-radius: 12px; padding: 14px 16px; font-size: 14px; }
+  .order-box b { color: var(--gold); }
+  .order-box ul { margin: 6px 0 0; padding-left: 18px; color: var(--soft); }
+  .order-box button { background: none; border: 0; color: var(--muted); cursor: pointer; text-decoration: underline; font: inherit; font-size: 13px; padding: 0; margin-top: 6px; }
   .form-note { font-size: 13px; color: var(--muted); margin: 0; }
-  .form-msg { grid-column: 1 / -1; margin: 0; font-weight: 600; }
-  .form-msg.bad { color: #b3261e; }
-  .thanks { background: #fff; color: var(--ink); border-radius: 18px; padding: 32px; text-align: center; }
-  .thanks b { display: block; font-size: 22px; margin-bottom: 6px; }
+  .form-msg { grid-column: 1 / -1; margin: 0; font-weight: 600; font-size: 14px; }
+  .form-msg.bad { color: #ff8a80; }
+  .thanks { position: relative; text-align: center; padding: 40px 10px; }
+  .thanks b { display: block; font-size: 26px; letter-spacing: -.02em; margin-bottom: 8px; }
+  .thanks p { color: var(--soft); }
 
-  footer.foot { padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
-  footer.foot .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  footer.foot a { color: var(--ink-2); }
+  footer.foot { border-top: 1px solid var(--line); padding: 34px 0 44px; color: var(--muted); font-size: 14px; }
+  footer.foot .wrap { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: center; }
+  footer.foot a { color: var(--soft); text-decoration: none; }
 
-  @media (max-width: 860px) {
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; } .marquee .track { animation: none; } html { scroll-behavior: auto; } }
+
+  @media (max-width: 980px) {
+    .shop { grid-template-columns: repeat(2, 1fr); }
+    .hero .wrap { grid-template-columns: 1fr; }
+    .stage { height: 380px; max-width: 520px; }
+  }
+  @media (max-width: 760px) {
     nav.links a:not(.btn) { display: none; }
-    .call-top { padding: 10px 16px; }
-    .call-top .long { display: none; } .call-top .short { display: inline; }
-    .hero-body { grid-template-columns: 1fr; padding: 32px 0 60px; }
-    .phone-mock { display: none; }
-    .why, .packages, .steps, .extra, .contact-grid { grid-template-columns: 1fr; }
-    section { padding: 56px 0; }
+    section { padding: 76px 0; }
+    .hero { padding: 54px 0 40px; }
+    .stage { height: 320px; }
+    .phone { width: 130px; }
+    .float-card { display: none; }
+    .feat, .pk-grid, .steps, .faq-grid, .contact-box { grid-template-columns: 1fr; }
+    .contact-box { padding: 26px 20px; gap: 26px; }
     form.enquiry { grid-template-columns: 1fr; }
+    .shop { grid-template-columns: 1fr; }
+    .cart span.hide-sm { display: none; }
   }
 </style>
 </head>
 <body>
-<div class="hero">
+<header class="top">
   <div class="wrap">
-    <header class="top">
-      <a class="brand" href="#"><img src="logo.png" alt="" width="30" height="38"><span><b>AR METHODS</b><small>PERTH WEB DESIGN</small></span></a>
-      <nav class="links"><a href="#packages">Packages</a><a href="#how">How it works</a><a href="#faq">FAQ</a><a class="btn btn-gold call-top" href="tel:0493523482">📞 <span class="long">Call 0493 523 482</span><span class="short">Call</span></a></nav>
-    </header>
-    <div class="hero-body">
+    <a class="brand" href="#"><img src="logo.png" alt="" width="26" height="33"><b>AR METHODS</b></a>
+    <nav class="links">
+      <a href="#work">What you get</a><a href="#packages">Packages</a><a href="#nfc">NFC cards</a><a href="#process">Process</a><a href="#faq">FAQ</a>
+      <a class="btn btn-gold" href="#contact">Start a project</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="pill"><i></i> Taking on new Perth clients</span>
+      <h1>Websites that make your business look <span class="grad">serious.</span></h1>
+      <p class="lede">We design fast, mobile-first websites for Perth tradies, cafés, salons and local businesses. You get found on Google, customers call in one tap, and you never have to touch the tech.</p>
+      <div class="ctas"><a class="btn btn-gold" href="#contact">Start a project</a><a class="btn btn-ghost" href="#packages">See packages</a></div>
+      <div class="facts">
+        <div><b>From $500</b>one-off price</div>
+        <div><b>Mobile-first</b>built for phones</div>
+        <div><b>Perth-based</b>local, not overseas</div>
+      </div>
+    </div>
+    <div class="stage" aria-hidden="true">
+      <div class="browser">
+        <div class="b-bar"><i></i><i></i><i></i><span>yourbusiness.com.au</span></div>
+        <div class="b-hero"><small>PLUMBING · SOUTHERN SUBURBS</small><h4>Blocked drain? We're there today.</h4><p>Licensed Perth plumbers. Upfront pricing, no call-out surprises.</p><span class="b-cta">📞 Call now</span></div>
+        <div class="b-body">
+          <div><b>Emergency</b>24/7 call-outs</div>
+          <div><b>Hot water</b>Repairs &amp; installs</div>
+          <div><b class="b-stars">★★★★★</b>Google reviews</div>
+        </div>
+      </div>
+      <div class="phone"><div class="ph"><b>Your Business</b><span>Open today · 7am–5pm</span></div><div class="pb"><i></i><i></i><i></i><span class="call">📞 Call now</span></div></div>
+      <div class="float-card"><div class="card black"><svg class="nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a8 8 0 0 1 0 8M10 6a12 12 0 0 1 0 12M14 4a16 16 0 0 1 0 16"/></svg><small>Tap to review</small><div><b>Review us on Google</b><div class="st">★★★★★</div></div></div></div>
+    </div>
+  </div>
+</section>
+
+<div class="marquee" aria-hidden="true"><div class="track" id="trades"></div></div>
+
+<section id="work">
+  <div class="wrap">
+    <span class="tag">What you get</span>
+    <h2>Everything a local business<br>actually needs online.</h2>
+    <p class="lede">No fluff, no jargon. Just a site that brings in calls and makes you look like the best option in your suburb.</p>
+    <div class="feat reveal">
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg><b>Built for phones first</b><p>Most of your customers find you on their phone. Your site looks sharp and loads fast on every screen.</p></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg><b>One tap to call</b><p>Big, obvious call and contact buttons, so visitors become jobs instead of closing the tab.</p></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><b>Found on Google</b><p>Set up properly for local search, with your suburb, services, hours and map, so people nearby can find you.</p></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg><b>Your reviews, front and centre</b><p>Show off what customers say about you, so new people trust you before they've even called.</p></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><b>We write it for you</b><p>A quick chat is all we need. We write the words and design everything. You just check it.</p></div>
+      <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><b>Looked after</b><p>On a care plan we keep it running and make your small changes, so it never goes stale.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="packages" style="padding-top:20px">
+  <div class="wrap">
+    <span class="tag">Packages</span>
+    <h2>Clear prices.<br>No surprises.</h2>
+    <p class="lede">One-off price, no lock-in contracts. Not sure which one fits? Send a message and we'll tell you honestly.</p>
+    <div class="pk-grid reveal" id="pkgList">
+      <div class="pkg"><h3>Starter</h3><div class="price">$500</div><div class="once">one-off</div><ul><li>Mobile-friendly website (up to 5 pages)</li><li>Click-to-call and contact form</li><li>Google Maps and opening hours</li><li>Basic Google search setup</li></ul><a class="btn btn-ghost" href="#contact" data-pick="Starter">Choose Starter</a></div>
+      <div class="pkg pop"><h3>Pro</h3><div class="price">$850</div><div class="once">one-off</div><ul><li>Everything in Starter</li><li>Google Business Profile setup</li><li>1 tap-to-review card</li><li>Photo gallery and reviews section</li></ul><a class="btn btn-gold" href="#contact" data-pick="Pro">Choose Pro</a></div>
+      <div class="pkg"><h3>Premium</h3><div class="price">$1,200</div><div class="once">one-off</div><ul><li>Everything in Pro</li><li>Online booking or enquiry system</li><li>3 months care plan included</li><li>Priority support</li></ul><a class="btn btn-ghost" href="#contact" data-pick="Premium">Choose Premium</a></div>
+    </div>
+    <div class="care reveal">
+      <div><b>Care plans from $10 / month</b><p>We keep your site online, secure and up to date, and make small changes for you, like new photos, prices or opening hours.</p></div>
+      <a class="btn btn-ghost" href="#contact" data-pick="Care plan">Ask about care plans</a>
+    </div>
+  </div>
+</section>
+
+<section id="nfc" style="background:var(--bg-2)">
+  <div class="wrap">
+    <div class="shop-head">
       <div>
-        <h1>A website that gets your Perth business <em>more calls</em>.</h1>
-        <p class="lead">Simple, mobile-friendly websites from $500 for tradies, cafés, salons and local shops. You don't need to write anything or know anything about tech. We build it and look after it.</p>
-        <div class="ctas"><a class="btn btn-gold" href="#contact">Get a free quote</a><a class="btn btn-line" href="tel:0493523482">Call Aman</a></div>
-        <p class="meta">Perth-based · Founded by Aman Raju</p>
-      </div>
-      <div class="phone-mock" aria-hidden="true">
-        <div class="pm-bar"></div>
-        <div class="pm-title">Your Business</div>
-        <div class="pm-sub">Plumber · Willetton</div>
-        <div class="pm-stars">★★★★★ <span class="pm-sub">Google reviews</span></div>
-        <div class="pm-img"></div>
-        <div class="pm-row"></div><div class="pm-row short"></div>
-        <div class="pm-call">📞 Call now</div>
+        <span class="tag">NFC cards &amp; stands</span>
+        <h2>More reviews.<br>More followers. One tap.</h2>
+        <p class="lede">Customers tap their phone on the card and it opens straight to your Google review page, Facebook or Instagram. No app, no typing. Put one on the counter and watch the reviews come in.</p>
       </div>
     </div>
+    <div class="shop reveal" id="shop"></div>
   </div>
-</div>
+</section>
 
-<section>
+<section id="process">
   <div class="wrap">
-    <p class="eyebrow">Why bother</p>
-    <h2>People Google you before they call you.</h2>
-    <p class="intro">When someone needs a plumber, a haircut or a coffee, they search on their phone. If you don't show up, or there's nothing to tap, they call the next business.</p>
-    <div class="why">
-      <div><b>Found on Google</b><p>Show up when locals search for what you do in your suburb, with your hours, location and reviews in one place.</p></div>
-      <div><b>One tap to call</b><p>Most people are on their phone. A big call button and a quick contact form turn visitors into jobs.</p></div>
-      <div><b>Look the part</b><p>A clean, proper website makes people trust you before they've even met you, and it works alongside your Facebook or Instagram.</p></div>
+    <span class="tag">Process</span>
+    <h2>Online in three steps.</h2>
+    <p class="lede">You run your business. We handle everything else.</p>
+    <div class="steps reveal">
+      <div class="step"><em>01</em><b>Quick chat</b><p>We call you and ask about your business, your customers and what makes you different. Ten minutes, tops.</p></div>
+      <div class="step"><em>02</em><b>We design it</b><p>We write the words, design the site and set it up. Send us your logo and a few photos if you have them.</p></div>
+      <div class="step"><em>03</em><b>You go live</b><p>You review it, we fine-tune it, and it goes live. On a care plan, we look after it from there.</p></div>
     </div>
   </div>
 </section>
 
-<section id="packages" style="padding-top:0">
-  <div class="wrap">
-    <p class="eyebrow">Packages</p>
-    <h2>Clear prices. No surprises.</h2>
-    <p class="intro">Pick a package and we'll take it from there. Not sure which one? Send us a message and we'll tell you honestly what you need.</p>
-    <div class="packages" id="pkgList">
-      <div class="pkg"><h3>Starter</h3><div class="price">$500</div><div class="once">one-off</div><ul><li>Mobile-friendly website (up to 5 pages)</li><li>Click-to-call and contact form</li><li>Google Maps and opening hours</li><li>Basic Google search setup</li></ul><a class="btn btn-wine" href="#contact" data-pick="Starter">Choose Starter</a></div>
-      <div class="pkg pop"><h3>Pro</h3><div class="price">$850</div><div class="once">one-off</div><ul><li>Everything in Starter</li><li>Google Business Profile setup</li><li>1 tap-to-review card</li><li>Photo gallery and reviews section</li></ul><a class="btn btn-wine" href="#contact" data-pick="Pro">Choose Pro</a></div>
-      <div class="pkg"><h3>Premium</h3><div class="price">$1,200</div><div class="once">one-off</div><ul><li>Everything in Pro</li><li>Online booking or enquiry system</li><li>3 months care plan included</li><li>Priority support</li></ul><a class="btn btn-wine" href="#contact" data-pick="Premium">Choose Premium</a></div>
-    </div>
-    <div class="care">
-      <div><b>Care plans from $10 a month</b><p>We keep your website running and make small changes for you, like new photos, prices or opening hours, so you never have to touch it.</p></div>
-      <a class="btn btn-wine" href="#contact" data-pick="Care plan">Ask about care plans</a>
-    </div>
-  </div>
-</section>
-
-<section id="how" style="background:#f4ebe2">
-  <div class="wrap">
-    <p class="eyebrow">How it works</p>
-    <h2>Three steps and you're online.</h2>
-    <p class="intro">You run your business. We handle the website.</p>
-    <div class="steps">
-      <div><b>Quick chat</b><p>We call you, ask about your business and what your customers need to know. Ten minutes, tops.</p></div>
-      <div><b>We build it</b><p>We write the words and design the site. Send us your logo and a few photos if you have them. If not, we'll sort it.</p></div>
-      <div><b>You're live</b><p>You check it, we make any changes, and it goes live. On a care plan, we look after it from there.</p></div>
-    </div>
-    <div class="extra">
-      <div><b>Got an old website?</b><p>We'll rebuild it so it loads fast, works properly on phones and looks like it belongs in this decade.</p></div>
-      <div><b>Tap-to-review cards, $50</b><p>Customers tap their phone on the card at your counter and it opens straight to your Google review page. More reviews, higher on Google.</p></div>
-    </div>
-  </div>
-</section>
-
-<section id="faq">
-  <div class="wrap">
-    <p class="eyebrow">Questions</p>
-    <h2>Good questions we get asked.</h2>
+<section id="faq" style="padding-top:20px">
+  <div class="wrap faq-grid">
+    <div><span class="tag">FAQ</span><h2>Questions,<br>answered.</h2><p class="lede">Anything else? Call <a href="tel:0493523482">0493 523 482</a>.</p></div>
     <div class="faq">
-      <details><summary>Do I need to write anything or know about tech?</summary><p>No. We ask you a few questions on the phone and write everything for you. You just check it before it goes live.</p></details>
-      <details><summary>What do I need to give you?</summary><p>Your business name, what you do, where you work and how people contact you. A logo and some photos help, but they're not required.</p></details>
-      <details><summary>I already have a Facebook or Instagram page. Do I still need a website?</summary><p>Your socials are great for people who already follow you. A website is what shows up when new customers search on Google, and it links back to your socials.</p></details>
-      <details><summary>Can you redo my old website?</summary><p>Yes. If your current website doesn't work well on phones or hasn't been touched in years, we'll rebuild it properly.</p></details>
-      <details><summary>What happens if I need changes later?</summary><p>On a care plan (from $10 a month) we make small changes for you. Without one, just ask and we'll quote you.</p></details>
-      <details><summary>Where are you based?</summary><p>We're in Perth and work with businesses right across the metro area.</p></details>
+      <details><summary>Do I need to write anything or know about tech?</summary><p>No. We ask you a few questions and write everything for you. You just check it before it goes live.</p></details>
+      <details><summary>What do I need to give you?</summary><p>Your business name, what you do, where you work and how people contact you. A logo and photos help, but they're not required.</p></details>
+      <details><summary>I already have Facebook or Instagram. Do I still need a website?</summary><p>Your socials are great for people who already follow you. A website is what shows up when new customers search on Google, and it links back to your socials.</p></details>
+      <details><summary>Can you redo my old website?</summary><p>Yes. If your current site doesn't work well on phones or hasn't been touched in years, we'll rebuild it properly.</p></details>
+      <details><summary>How do the NFC cards work?</summary><p>Each card or stand has a tiny chip and a QR code linked to your page. Customers tap their phone on it (or scan the code) and your Google review page, Facebook or Instagram opens instantly. Works with iPhone and Android.</p></details>
+      <details><summary>What if I need changes later?</summary><p>On a care plan (from $10 a month) we make small changes for you. Without one, just ask and we'll quote you.</p></details>
     </div>
   </div>
 </section>
 
 <section id="contact" class="contact">
-  <div class="wrap contact-grid">
-    <div class="direct">
-      <p class="eyebrow">Get started</p>
-      <h2>Let's get your business online.</h2>
-      <p class="intro">Send us a message and we'll call you back. Prefer to talk now?</p>
-      <a class="big" href="tel:0493523482">📞 0493 523 482</a>
-      <p>Or message us on <a href="https://www.instagram.com/ar.methods_/" target="_blank" rel="noopener">Instagram</a>.</p>
-    </div>
-    <div id="formBox">
-      <form class="enquiry" id="enquiry" novalidate>
-        <div><label for="f-name">Your name *</label><input id="f-name" name="name" maxlength="80" autocomplete="name" required></div>
-        <div><label for="f-business">Business name</label><input id="f-business" name="business" maxlength="120" autocomplete="organization"></div>
-        <div><label for="f-phone">Phone</label><input id="f-phone" name="phone" type="tel" maxlength="30" autocomplete="tel"></div>
-        <div><label for="f-email">Email</label><input id="f-email" name="email" type="email" maxlength="120" autocomplete="email"></div>
-        <div><label for="f-suburb">Suburb</label><input id="f-suburb" name="suburb" maxlength="60"></div>
-        <div><label for="f-package">Package</label><select id="f-package" name="package"><option value="">Not sure yet</option><option>Starter</option><option>Pro</option><option>Premium</option><option>Care plan</option></select></div>
-        <div class="full"><label for="f-message">Anything we should know?</label><textarea id="f-message" name="message" maxlength="1500" placeholder="What you do, what you'd like on the website, if you have an old one…"></textarea></div>
-        <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <p class="form-msg" id="formMsg" role="status"></p>
-        <div class="full"><button class="btn btn-gold" type="submit">Send enquiry</button></div>
-        <p class="form-note full">We'll only use your details to get back to you about your website.</p>
-      </form>
+  <div class="wrap">
+    <div class="contact-box">
+      <div class="direct">
+        <span class="tag">Start a project</span>
+        <h2>Let's make your business look the part.</h2>
+        <p>Tell us a bit about your business and we'll get back to you. Prefer to talk?</p>
+        <a class="big" href="tel:0493523482">0493 523 482</a>
+        <p>Or message us on <a href="https://www.instagram.com/ar.methods_/" target="_blank" rel="noopener">Instagram</a>.</p>
+      </div>
+      <div id="formBox">
+        <form class="enquiry" id="enquiry" novalidate>
+          <div class="order-box" id="orderBox" hidden></div>
+          <div><label for="f-name">Your name *</label><input id="f-name" name="name" maxlength="80" autocomplete="name" required></div>
+          <div><label for="f-business">Business</label><input id="f-business" name="business" maxlength="120" autocomplete="organization"></div>
+          <div><label for="f-phone">Phone</label><input id="f-phone" name="phone" type="tel" maxlength="30" autocomplete="tel"></div>
+          <div><label for="f-email">Email</label><input id="f-email" name="email" type="email" maxlength="120" autocomplete="email"></div>
+          <div><label for="f-suburb">Suburb</label><input id="f-suburb" name="suburb" maxlength="60"></div>
+          <div><label for="f-package">Interested in</label><select id="f-package" name="package"><option value="">Not sure yet</option><option>Starter</option><option>Pro</option><option>Premium</option><option>Care plan</option><option>NFC cards only</option></select></div>
+          <div class="full"><label for="f-message">Tell us about your business</label><textarea id="f-message" name="message" maxlength="1200" placeholder="What you do, what you'd like on the website, if you have an old one…"></textarea></div>
+          <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <p class="form-msg" id="formMsg" role="status"></p>
+          <div class="full"><button class="btn btn-gold" type="submit" id="sendBtn">Send enquiry</button></div>
+          <p class="form-note full">No payment now. We'll confirm everything with you first.</p>
+        </form>
+      </div>
     </div>
   </div>
 </section>
 
 <footer class="foot">
   <div class="wrap">
-    <span>© <span id="yr"></span> AR Methods · Perth, Western Australia</span>
+    <a class="brand" href="#"><img src="logo.png" alt="" width="22" height="28"><b>AR METHODS</b></a>
+    <span>© <span id="yr"></span> AR Methods · Web design, Perth WA</span>
     <span><a href="tel:0493523482">0493 523 482</a> · <a href="https://www.instagram.com/ar.methods_/" target="_blank" rel="noopener">Instagram</a></span>
   </div>
 </footer>
+
+<div class="cart" id="cart" role="status"><span>🛒 <b id="cartCount">0 items</b> <span class="hide-sm">· NFC order</span> · <b id="cartTotal">$0</b></span><a class="btn btn-gold" href="#contact">Order</a></div>
 
 <script>
 const FS = "https://firestore.googleapis.com/v1/projects/armethods/databases/(default)/documents";
@@ -264,13 +401,76 @@ document.getElementById("yr").textContent = new Date().getFullYear();
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const money = (n) => "$" + Math.round(n).toLocaleString("en-AU");
 
-// "Choose Pro" etc. fills the package in the form
+// trades marquee
+const TRADES = ["Plumbers", "Electricians", "Cafés", "Barbers", "Hair salons", "Builders", "Mechanics", "Cleaners", "Landscapers", "Nail salons", "Physios", "Dog groomers", "Painters", "Restaurants", "Tilers", "Removalists"];
+document.getElementById("trades").innerHTML = [...TRADES, ...TRADES].map((t) => `<span>${t}</span>`).join("");
+
+// ---------- NFC shop ----------
+const NFC_ICON = '<svg class="nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a8 8 0 0 1 0 8M10 6a12 12 0 0 1 0 12M14 4a16 16 0 0 1 0 16"/></svg>';
+const PRODUCTS = [
+  { id: "gcard", name: "Google review card", price: 50, colours: ["Black", "White"], desc: "Wallet-size card for the counter or to hand out. Tap or scan to leave a review.",
+    show: (c) => `<div class="card ${c.toLowerCase()}">${NFC_ICON}<small>Tap to review</small><div><b>Review us on Google</b><div class="st">★★★★★</div></div></div>` },
+  { id: "gstand", name: "Google review stand", price: 50, colours: ["Black", "White"], desc: "Sits on your counter or table so every customer sees it. Tap or scan the QR.",
+    show: (c) => `<div class="stand ${c.toLowerCase()}"><div class="plate"><div class="st">★★★★★</div><b>Review us<br>on Google</b><div class="qr"></div></div><div class="base"></div></div>` },
+  { id: "fbcard", name: "Facebook card", price: 50, colours: [], desc: "One tap opens your Facebook page so customers can like and follow you.",
+    show: () => `<div class="card fb">${NFC_ICON}<small>Tap to follow</small><div><b>Find us on Facebook</b></div></div>` },
+  { id: "igcard", name: "Instagram card", price: 50, colours: [], desc: "One tap opens your Instagram so customers can follow you on the spot.",
+    show: () => `<div class="card ig">${NFC_ICON}<small>Tap to follow</small><div><b>Follow us on Instagram</b></div></div>` },
+];
+const sel = Object.fromEntries(PRODUCTS.map((p) => [p.id, { colour: p.colours[0] || "", qty: 1 }]));
+const cart = []; // { id, name, colour, qty, price }
+const shop = document.getElementById("shop");
+shop.innerHTML = PRODUCTS.map((p) => `<article class="prod" data-p="${p.id}">
+    <div class="show">${p.show(sel[p.id].colour)}</div>
+    <h3>${esc(p.name)}</h3><p>${esc(p.desc)}</p>
+    <div class="row"><span class="cost">${money(p.price)}</span>
+      ${p.colours.length ? `<div class="swatches" role="radiogroup" aria-label="Colour">${p.colours.map((c, i) => `<button type="button" data-c="${c}" class="${i ? "" : "on"}" role="radio" aria-checked="${!i}" aria-label="${c}" title="${c}"></button>`).join("")}</div>` : ""}
+    </div>
+    <div class="row"><div class="qty"><button type="button" data-q="-1" aria-label="Fewer">−</button><span data-qv>1</span><button type="button" data-q="1" aria-label="More">+</button></div>
+      <span class="muted" data-cn style="font-size:13px;color:var(--muted)">${p.colours[0] || ""}</span></div>
+    <button type="button" class="btn btn-gold add" data-add>Add to order</button>
+  </article>`).join("");
+shop.querySelectorAll(".prod").forEach((el) => {
+  const p = PRODUCTS.find((x) => x.id === el.dataset.p), s = sel[p.id];
+  el.querySelectorAll("[data-c]").forEach((b) => b.addEventListener("click", () => {
+    s.colour = b.dataset.c;
+    el.querySelectorAll("[data-c]").forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", String(x === b)); });
+    el.querySelector(".show").innerHTML = p.show(s.colour);
+    el.querySelector("[data-cn]").textContent = s.colour;
+  }));
+  el.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", () => {
+    s.qty = Math.min(50, Math.max(1, s.qty + Number(b.dataset.q)));
+    el.querySelector("[data-qv]").textContent = s.qty;
+  }));
+  el.querySelector("[data-add]").addEventListener("click", (e) => {
+    const hit = cart.find((c) => c.id === p.id && c.colour === s.colour);
+    if (hit) hit.qty = Math.min(50, hit.qty + s.qty); else cart.push({ id: p.id, name: p.name, colour: s.colour, qty: s.qty, price: p.price });
+    const b = e.currentTarget; b.textContent = "Added ✓"; b.classList.add("done");
+    setTimeout(() => { b.textContent = "Add to order"; b.classList.remove("done"); }, 1400);
+    drawCart();
+  });
+});
+const itemLine = (c) => `${c.name}${c.colour ? ` (${c.colour})` : ""} × ${c.qty}`;
+function drawCart() {
+  const n = cart.reduce((a, c) => a + c.qty, 0), total = cart.reduce((a, c) => a + c.qty * c.price, 0);
+  document.getElementById("cart").classList.toggle("show", n > 0);
+  document.getElementById("cartCount").textContent = `${n} item${n === 1 ? "" : "s"}`;
+  document.getElementById("cartTotal").textContent = money(total);
+  const box = document.getElementById("orderBox");
+  if (!box) return;
+  box.hidden = !n;
+  box.innerHTML = n ? `<b>Your NFC order · ${money(total)}</b><ul>${cart.map((c) => `<li>${esc(itemLine(c))}: ${money(c.qty * c.price)}</li>`).join("")}</ul><button type="button" id="clearCart">Clear order</button>` : "";
+  document.getElementById("clearCart")?.addEventListener("click", () => { cart.length = 0; drawCart(); });
+  document.getElementById("sendBtn").textContent = n ? "Send order & enquiry" : "Send enquiry";
+}
+
+// "Choose Pro" etc. fills the form
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-pick]");
-  if (b) { const sel = document.getElementById("f-package"); if (![...sel.options].some((o) => o.value === b.dataset.pick)) sel.add(new Option(b.dataset.pick)); sel.value = b.dataset.pick; }
+  if (b) { const s = document.getElementById("f-package"); if (![...s.options].some((o) => o.value === b.dataset.pick)) s.add(new Option(b.dataset.pick)); s.value = b.dataset.pick; }
 });
 
-// Live packages and prices (same ones the team sells), the page already shows the defaults
+// live packages and prices (the same ones the team sells)
 fetch(`${FS}/settings/packages?key=${KEY}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
   const vals = d?.fields?.list?.arrayValue?.values;
   if (!vals?.length) return;
@@ -281,23 +481,27 @@ fetch(`${FS}/settings/packages?key=${KEY}`).then((r) => (r.ok ? r.json() : null)
   if (!list.length) return;
   const pop = list.length >= 3 ? 1 : -1;
   document.getElementById("pkgList").innerHTML = list.map((p, i) => `<div class="pkg ${i === pop ? "pop" : ""}"><h3>${esc(p.name)}</h3><div class="price">${money(p.price)}</div><div class="once">one-off</div>
-    <ul>${p.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><a class="btn btn-wine" href="#contact" data-pick="${esc(p.name)}">Choose ${esc(p.name)}</a></div>`).join("");
-  const sel = document.getElementById("f-package");
-  sel.innerHTML = `<option value="">Not sure yet</option>${list.map((p) => `<option>${esc(p.name)}</option>`).join("")}<option>Care plan</option>`;
+    <ul>${p.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><a class="btn ${i === pop ? "btn-gold" : "btn-ghost"}" href="#contact" data-pick="${esc(p.name)}">Choose ${esc(p.name)}</a></div>`).join("");
+  document.getElementById("f-package").innerHTML = `<option value="">Not sure yet</option>${list.map((p) => `<option>${esc(p.name)}</option>`).join("")}<option>Care plan</option><option>NFC cards only</option>`;
 }).catch(() => {});
 
-// Enquiry form → Firestore (rules validate every field; createdAt is set by the server)
+// enquiry / order → Firestore (rules check every field; createdAt is set by the server)
 document.getElementById("enquiry").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const f = e.target, msg = document.getElementById("formMsg"), btn = f.querySelector("button");
+  const f = e.target, msg = document.getElementById("formMsg"), btn = document.getElementById("sendBtn");
   const v = (n) => (f.elements[n].value || "").trim();
+  const bad = (t, el) => { msg.className = "form-msg bad"; msg.textContent = t; el?.focus(); };
   msg.className = "form-msg"; msg.textContent = "";
   if (v("website")) return; // bots fill the hidden field
-  if (!v("name")) { msg.className = "form-msg bad"; msg.textContent = "Please add your name."; return f.elements.name.focus(); }
-  if (!v("phone") && !v("email")) { msg.className = "form-msg bad"; msg.textContent = "Please add a phone number or email so we can get back to you."; return f.elements.phone.focus(); }
-  if (v("email") && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("email"))) { msg.className = "form-msg bad"; msg.textContent = "That email doesn't look right."; return f.elements.email.focus(); }
-  const fields = { status: { stringValue: "new" } };
-  for (const n of ["name", "business", "phone", "email", "suburb", "message", "package"]) fields[n] = { stringValue: v(n) };
+  if (!v("name")) return bad("Please add your name.", f.elements.name);
+  if (!v("phone") && !v("email")) return bad("Please add a phone number or email so we can get back to you.", f.elements.phone);
+  if (v("email") && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("email"))) return bad("That email doesn't look right.", f.elements.email);
+  const total = cart.reduce((a, c) => a + c.qty * c.price, 0);
+  const order = cart.length ? `NFC ORDER (${money(total)}):\n${cart.map((c) => `- ${itemLine(c)} = ${money(c.qty * c.price)}`).join("\n")}\n\n` : "";
+  const pkg = v("package") || (cart.length ? "NFC cards only" : "");
+  const fields = { status: { stringValue: "new" }, message: { stringValue: (order + v("message")).slice(0, 1500) },
+    package: { stringValue: (cart.length && pkg !== "NFC cards only" ? `${pkg} + NFC` : pkg).slice(0, 40) } };
+  for (const n of ["name", "business", "phone", "email", "suburb"]) fields[n] = { stringValue: v(n) };
   const id = Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => b.toString(16).padStart(2, "0")).join("");
   btn.disabled = true; btn.textContent = "Sending…";
   try {
@@ -305,12 +509,17 @@ document.getElementById("enquiry").addEventListener("submit", async (e) => {
       update: { name: `projects/armethods/databases/(default)/documents/enquiries/${id}`, fields },
       updateTransforms: [{ fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" }], currentDocument: { exists: false } }] }) });
     if (!r.ok) throw new Error(r.status);
-    document.getElementById("formBox").innerHTML = `<div class="thanks"><b>Thanks, ${esc(v("name").split(" ")[0])}!</b><p>We've got your message and we'll call you soon. If it's urgent, call <a href="tel:0493523482">0493 523 482</a>.</p></div>`;
+    cart.length = 0; drawCart();
+    document.getElementById("formBox").innerHTML = `<div class="thanks"><b>Thanks, ${esc(v("name").split(" ")[0])}. We're on it.</b><p>We've got your ${order ? "order and message" : "message"} and we'll be in touch soon. If it's urgent, call <a href="tel:0493523482">0493 523 482</a>.</p></div>`;
   } catch {
-    btn.disabled = false; btn.textContent = "Send enquiry";
-    msg.className = "form-msg bad"; msg.innerHTML = `Sorry, that didn't send. Please call <a href="tel:0493523482">0493 523 482</a> instead.`;
+    btn.disabled = false; drawCart();
+    bad("Sorry, that didn't send. Please call 0493 523 482 instead.");
   }
 });
+
+// reveal on scroll
+const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => es.forEach((x) => { if (x.isIntersecting) { x.target.classList.add("in"); io.unobserve(x.target); } }), { threshold: .12 }) : null;
+document.querySelectorAll(".reveal").forEach((el) => (io ? io.observe(el) : el.classList.add("in")));
 </script>
 </body>
 </html>
