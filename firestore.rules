@@ -312,7 +312,16 @@ service cloud.firestore {
         && shortString(request.resource.data.get('email', ''), 120)
         && request.resource.data.get('call', true) is bool
         && request.resource.data.get('message', true) is bool
-        && request.resource.data.get('sendEmail', true) is bool;
+        && request.resource.data.get('sendEmail', true) is bool
+        && request.resource.data.get('whatsapp', true) is bool
+        && shortString(request.resource.data.get('whatsappPhone', ''), 20)
+        && shortString(request.resource.data.get('whatsappKey', ''), 40)
+        && shortString(request.resource.data.get('speakKey', ''), 64);
+    }
+    // Spoken brief for the iPhone Shortcut: the document id is a long random secret, so it can only be fetched, never listed
+    match /briefPublic/{id} {
+      allow get: if true;
+      allow list, write: if false;
     }
     // Team chat: everyone active reads and posts as themselves (name/role must match their profile); admin can delete
     match /messages/{id} {

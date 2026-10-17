@@ -1,9 +1,11 @@
 // Morning brief: runs every day at 7:30am Perth (GitHub Actions) and tells Aman what happened yesterday.
 //  - 📞 rings his Telegram and reads the key numbers (CallMeBot, free)
 //  - 💬 sends the full report as a Telegram message (CallMeBot, free)
+//  - 🟢 sends the full report as a WhatsApp message (CallMeBot, free)
+//  - 🔊 saves the spoken version to briefPublic/{speakKey} for the iPhone Shortcut that reads it out loud
 //  - 📧 emails the report (Gmail, needs GMAIL_APP_PASSWORD secret)
 //  - 📋 saves it to Firestore (briefs/latest) for the Admin page
-// Settings live in Firestore settings/brief: { telegramUser, email, call, message, sendEmail }.
+// Settings live in Firestore settings/brief: { telegramUser, email, call, message, sendEmail, whatsapp, whatsappPhone, whatsappKey, speakKey }.
 // DRY_RUN=1 prints everything instead of sending.
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
@@ -124,6 +126,20 @@ async function main() {
     const url = `https://api.callmebot.com/text.php?user=${encodeURIComponent(user)}&text=${encodeURIComponent(brief.text.slice(0, 3500))}`;
     if (DRY) results.push("message: (dry run)");
     else try { if (s.call !== false) await new Promise((r) => setTimeout(r, 20000)); await getJSON(url); results.push("message: ok"); } catch (e) { results.push("message: failed " + e.message); }
+  }
+  // 🟢 WhatsApp message
+  const waPhone = String(s.whatsappPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "61");
+  if (s.whatsapp !== false && waPhone && s.whatsappKey) {
+    const url = `https://api.callmebot.com/whatsapp.php?phone=${waPhone}&text=${encodeURIComponent(brief.text.slice(0, 3500))}&apikey=${encodeURIComponent(s.whatsappKey)}`;
+    if (DRY) results.push("whatsapp: (dry run)");
+    else try { await getJSON(url); results.push("whatsapp: ok"); } catch (e) { results.push("whatsapp: failed " + e.message); }
+  }
+  // 🔊 iPhone Shortcut reads this one out loud
+  if (s.speakKey && !DRY) {
+    const pub = db.collection("briefPublic");
+    for (const d of (await pub.get()).docs) if (d.id !== s.speakKey) await d.ref.delete();
+    await pub.doc(s.speakKey).set({ day: brief.day, say: brief.say, createdAt: FieldValue.serverTimestamp() });
+    results.push("iphone: ready");
   }
   // 📧 Email
   const to = s.email || process.env.BRIEF_EMAIL || "amanraju024@gmail.com";

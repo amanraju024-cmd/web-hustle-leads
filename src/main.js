@@ -831,6 +831,7 @@ async function startOldChecks(result) {
   await Promise.all([worker(), worker(), worker()]);
 }
 const firebaseApiKey = () => { try { return D.app.options.apiKey; } catch { return ""; } };
+const firebaseProjectId = () => { try { return D.app.options.projectId; } catch { return "armethods"; } };
 
 function drawOldResults() {
   const r = state.search;
@@ -1677,22 +1678,33 @@ async function screenTeam() {
     </form>
     <form class="card" id="briefForm">
       <h2>☀️ Morning brief (7:30am)</h2>
-      <p class="muted small">Every morning your phone rings on Telegram and reads yesterday's numbers, then you get the full report as a Telegram message and email. Free.</p>
+      <p class="muted small">Every morning at 7:30 you get yesterday's numbers, who called, money owed and what's due today. Pick any of these, all free.</p>
+      <h3>🟢 WhatsApp message</h3>
       <ol class="steps small">
-        <li>Install <b>Telegram</b> and set a <b>username</b> (Settings → Username).</li>
-        <li>In Telegram, search <b>@CallMeBot_txtbot</b> and press <b>Start</b>. This lets it call and message you.</li>
-        <li>Type your username below and save.</li>
+        <li>Open <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noopener">CallMeBot's WhatsApp page</a>, save their number in your contacts and send them the message it shows.</li>
+        <li>They reply with your <b>API key</b>. Paste it below with your mobile number.</li>
       </ol>
-      <label for="bUser">Telegram username</label>
-      <input id="bUser" maxlength="40" placeholder="@yourname">
+      <div class="inline wide"><input id="bWaPhone" inputmode="tel" maxlength="20" placeholder="0493 523 482" aria-label="WhatsApp number">
+        <input id="bWaKey" maxlength="40" placeholder="API key" spellcheck="false" aria-label="WhatsApp API key"></div>
+      <h3>🔊 iPhone reads it out loud</h3>
+      <div id="speakBox"></div>
+      <h3>📧 Email</h3>
+      <input id="bEmail" type="email" maxlength="120" placeholder="amanraju024@gmail.com" aria-label="Email to">
+      <p class="muted small">Needs a one-time Gmail app password saved in GitHub as GMAIL_APP_PASSWORD.</p>
+      <details class="small" id="tgBox"><summary>📞 Telegram call (optional)</summary>
+        <ol class="steps small">
+          <li>Install <b>Telegram</b> and set a <b>username</b> (Settings → Username).</li>
+          <li>In Telegram, search <b>@CallMeBot_txtbot</b> and press <b>Start</b>. This lets it call and message you.</li>
+        </ol>
+        <input id="bUser" maxlength="40" placeholder="@yourname" aria-label="Telegram username">
+      </details>
       <div class="brief-opts">
-        <label class="check"><input type="checkbox" id="bCall" checked> 📞 Phone call</label>
-        <label class="check"><input type="checkbox" id="bMsg" checked> 💬 Telegram message</label>
+        <label class="check"><input type="checkbox" id="bWa" checked> 🟢 WhatsApp</label>
         <label class="check"><input type="checkbox" id="bMail" checked> 📧 Email</label>
+        <label class="check"><input type="checkbox" id="bCall" checked> 📞 Telegram call</label>
+        <label class="check"><input type="checkbox" id="bMsg" checked> 💬 Telegram message</label>
       </div>
-      <label for="bEmail">Email to</label>
-      <input id="bEmail" type="email" maxlength="120" placeholder="amanraju024@gmail.com">
-      <p class="muted small">Email needs a one-time Gmail app password saved in GitHub as GMAIL_APP_PASSWORD. The brief also shows at the top of Admin with a ▶ Listen button.</p>
+      <p class="muted small">The brief also shows at the top of Admin with a ▶ Listen button.</p>
       <button type="submit" class="primary">Save</button>
     </form>
     <form class="card" id="goalForm">
@@ -1704,16 +1716,45 @@ async function screenTeam() {
   $("#briefForm").addEventListener("input", () => { briefTouched = true; });
   D.getBriefSettings().then((b) => {
     if (!$("#briefForm") || briefTouched) return;
-    $("#bUser").value = b.telegramUser || ""; $("#bEmail").value = b.email || "";
+    $("#bUser").value = b.telegramUser || ""; if (b.telegramUser) $("#tgBox").open = true; $("#bEmail").value = b.email || "";
     $("#bCall").checked = b.call !== false; $("#bMsg").checked = b.message !== false; $("#bMail").checked = b.sendEmail !== false;
+    $("#bWa").checked = b.whatsapp !== false; $("#bWaPhone").value = b.whatsappPhone || ""; $("#bWaKey").value = b.whatsappKey || "";
+    briefSpeakKey = b.speakKey || ""; drawSpeak();
   }).catch(() => {});
+  let briefSpeakKey = "";
+  const drawSpeak = () => {
+    const box = $("#speakBox");
+    if (!box) return;
+    if (!briefSpeakKey) { box.innerHTML = `<p class="muted small">Your iPhone can play the update out loud every morning using the built-in Shortcuts app. No extra apps.</p>
+      <button type="button" class="ghost" id="speakMake">Set up iPhone</button>`; $("#speakMake").onclick = makeSpeak; return; }
+    const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId()}/databases/(default)/documents/briefPublic/${briefSpeakKey}?key=${firebaseApiKey()}`;
+    box.innerHTML = `<p class="muted small">Do this once on your iPhone (about 1 minute). Copy the link first:</p>
+      <div class="inline wide"><input id="speakUrl" readonly value="${esc(url)}"><button type="button" class="primary" id="speakCopy">Copy</button></div>
+      <ol class="steps small">
+        <li>Open <b>Shortcuts</b> → <b>Automation</b> → <b>+</b> → <b>Time of Day</b>. Pick <b>7:55am</b>, <b>Daily</b>, and choose <b>Run Immediately</b>. Tap Next → <b>New Blank Automation</b>.</li>
+        <li>Add <b>Get Contents of URL</b> and paste the link.</li>
+        <li>Add <b>Get Dictionary Value</b>: Get <b>Value</b> for <b>fields</b>. Add it twice more: <b>say</b>, then <b>stringValue</b>.</li>
+        <li>Add <b>Speak Text</b>. Done. Tap ▶ to test it.</li>
+      </ol>
+      <p class="muted small">Keep this link private. <button type="button" class="linkbtn" id="speakReset">Make a new link</button> if it ever gets shared.</p>`;
+    $("#speakCopy").onclick = () => { navigator.clipboard?.writeText(url).then(() => toast("Link copied"), () => { $("#speakUrl").select(); }); };
+    $("#speakReset").onclick = makeSpeak;
+  };
+  const makeSpeak = async () => {
+    const key = [...crypto.getRandomValues(new Uint8Array(24))].map((n) => n.toString(16).padStart(2, "0")).join("");
+    try { await D.saveBriefSettings({ ...(await D.getBriefSettings()), speakKey: key }); briefSpeakKey = key; drawSpeak(); toast("iPhone link ready. It starts working after tomorrow's brief."); }
+    catch (err) { toast(D.authMessage(err), "bad"); }
+  };
+  drawSpeak();
   $("#briefForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const u = $("#bUser").value.trim().replace(/^@?/, "");
     if (u && !/^[A-Za-z0-9_]{5,32}$/.test(u)) return toast("Telegram usernames are 5–32 letters, numbers or _", "bad");
-    const data = { telegramUser: u ? "@" + u : "", email: $("#bEmail").value.trim(), call: $("#bCall").checked, message: $("#bMsg").checked, sendEmail: $("#bMail").checked };
+    if ($("#bWaPhone").value.trim() && !/^\+?[0-9 ]{8,16}$/.test($("#bWaPhone").value.trim())) return toast("Check the WhatsApp number", "bad");
+    const data = { telegramUser: u ? "@" + u : "", email: $("#bEmail").value.trim(), call: $("#bCall").checked, message: $("#bMsg").checked, sendEmail: $("#bMail").checked,
+      whatsapp: $("#bWa").checked, whatsappPhone: $("#bWaPhone").value.trim(), whatsappKey: $("#bWaKey").value.trim(), speakKey: briefSpeakKey };
     await busy(e.submitter || $("#briefForm button[type=submit]"), "Saving", async () => {
-      try { await D.saveBriefSettings(data); toast(u ? `Saved. Your first call comes tomorrow at 7:30am.` : "Saved"); }
+      try { await D.saveBriefSettings(data); toast("Saved. Your next brief comes tomorrow at 7:30am."); }
       catch (err) { toast(D.authMessage(err), "bad"); }
     });
   });

@@ -467,3 +467,14 @@ test("morning brief: only admin reads it, nobody can fake one, settings are admi
   await assertFails(setDoc(doc(as("w1"), "settings/brief"), { telegramUser: "@me" }));
   await assertFails(getDoc(doc(as("w1"), "settings/brief")));
 });
+
+test("iPhone spoken brief: fetchable by its secret id, never listable or writable", async () => {
+  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), "briefPublic/s3cr3tkey"), { say: "Good morning" }));
+  const anon = env.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(anon, "briefPublic/s3cr3tkey")));
+  await assertFails(getDocs(collection(anon, "briefPublic")));
+  await assertFails(setDoc(doc(anon, "briefPublic/x"), { say: "hacked" }));
+  await assertFails(setDoc(doc(as("owner"), "briefPublic/x"), { say: "hacked" }));
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/brief"), { whatsapp: true, whatsappPhone: "0493 523 482", whatsappKey: "123456", speakKey: "a".repeat(48) }));
+  await assertFails(setDoc(doc(as("owner"), "settings/brief"), { speakKey: "a".repeat(80) }));
+});
