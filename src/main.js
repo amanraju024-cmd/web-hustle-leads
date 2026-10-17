@@ -1344,6 +1344,7 @@ async function screenAdmin() {
     ${adminNav("admin")}
     <h1 class="page">Team performance</h1>
     ${new Date(`${today}T12:00:00+08:00`).getUTCDay() === 1 ? `<div class="notice info">📊 Last week's report is ready. <a href="#report">View it</a></div>` : ""}
+    <div id="briefBox"></div>
     <section class="card live-card"><h2>Who's on right now</h2><div id="liveNow"><div class="loading"><span class="spinner"></span></div></div></section>
     <div id="kpis"></div>
     <div id="moneyBox"></div>
@@ -1362,6 +1363,24 @@ async function screenAdmin() {
     </section>`;
 
   drawMoney(today, rid);
+  D.getLatestBrief().then((b) => {
+    const box = $("#briefBox");
+    if (!box || rid !== state.routeId) return;
+    if (!b) { box.innerHTML = `<section class="card brief-card"><h2>☀️ Morning brief</h2><p class="muted small">Your first brief arrives tomorrow at 7:30am. Set up the phone call in <a href="#team">Team → Morning brief</a>.</p></section>`; return; }
+    box.innerHTML = `<section class="card brief-card"><div class="brief-head"><h2>☀️ Morning brief <span class="muted small">${esc(prettyDay(b.day))}</span></h2>
+        <button class="primary small" id="briefPlay">▶ Listen</button></div>
+      <pre class="brief-text">${esc(b.text || "")}</pre>
+      ${b.results?.length ? `<p class="muted small">Sent: ${esc(b.results.join(" · "))}</p>` : ""}</section>`;
+    $("#briefPlay").addEventListener("click", (e) => {
+      const synth = window.speechSynthesis;
+      if (!synth) return toast("Your browser can't read text out loud", "bad");
+      if (synth.speaking) { synth.cancel(); e.target.textContent = "▶ Listen"; return; }
+      const u = new SpeechSynthesisUtterance(b.say || b.text);
+      u.lang = "en-AU"; u.rate = 1;
+      u.onend = () => { e.target.textContent = "▶ Listen"; };
+      synth.speak(u); e.target.textContent = "■ Stop";
+    });
+  }).catch(() => {});
   let presence = new Map();
   const drawLive = () => {
     const box = $("#liveNow");
@@ -1656,11 +1675,48 @@ async function screenTeam() {
       <div class="inline wide"><input id="gToken" type="password" placeholder="${state.googleToken ? "Saved. Paste a new one to replace it" : "apify_api_..."}" spellcheck="false">
         <button class="primary" type="submit">Save</button></div>
     </form>
+    <form class="card" id="briefForm">
+      <h2>☀️ Morning brief (7:30am)</h2>
+      <p class="muted small">Every morning your phone rings on Telegram and reads yesterday's numbers, then you get the full report as a Telegram message and email. Free.</p>
+      <ol class="steps small">
+        <li>Install <b>Telegram</b> and set a <b>username</b> (Settings → Username).</li>
+        <li>In Telegram, search <b>@CallMeBot_txtbot</b> and press <b>Start</b>. This lets it call and message you.</li>
+        <li>Type your username below and save.</li>
+      </ol>
+      <label for="bUser">Telegram username</label>
+      <input id="bUser" maxlength="40" placeholder="@yourname">
+      <div class="brief-opts">
+        <label class="check"><input type="checkbox" id="bCall" checked> 📞 Phone call</label>
+        <label class="check"><input type="checkbox" id="bMsg" checked> 💬 Telegram message</label>
+        <label class="check"><input type="checkbox" id="bMail" checked> 📧 Email</label>
+      </div>
+      <label for="bEmail">Email to</label>
+      <input id="bEmail" type="email" maxlength="120" placeholder="amanraju024@gmail.com">
+      <p class="muted small">Email needs a one-time Gmail app password saved in GitHub as GMAIL_APP_PASSWORD. The brief also shows at the top of Admin with a ▶ Listen button.</p>
+      <button type="submit" class="primary">Save</button>
+    </form>
     <form class="card" id="goalForm">
       <h2>Daily call goal</h2>
       <div class="inline"><input id="goal" type="number" min="1" max="500" value="${state.goal}" aria-label="Daily call goal"><button class="primary" type="submit">Save</button></div>
     </form>
     <section class="card"><h2>Everyone</h2><div id="teamList"><div class="loading"><span class="spinner"></span></div></div></section>`;
+  let briefTouched = false;
+  $("#briefForm").addEventListener("input", () => { briefTouched = true; });
+  D.getBriefSettings().then((b) => {
+    if (!$("#briefForm") || briefTouched) return;
+    $("#bUser").value = b.telegramUser || ""; $("#bEmail").value = b.email || "";
+    $("#bCall").checked = b.call !== false; $("#bMsg").checked = b.message !== false; $("#bMail").checked = b.sendEmail !== false;
+  }).catch(() => {});
+  $("#briefForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const u = $("#bUser").value.trim().replace(/^@?/, "");
+    if (u && !/^[A-Za-z0-9_]{5,32}$/.test(u)) return toast("Telegram usernames are 5–32 letters, numbers or _", "bad");
+    const data = { telegramUser: u ? "@" + u : "", email: $("#bEmail").value.trim(), call: $("#bCall").checked, message: $("#bMsg").checked, sendEmail: $("#bMail").checked };
+    await busy(e.submitter || $("#briefForm button[type=submit]"), "Saving", async () => {
+      try { await D.saveBriefSettings(data); toast(u ? `Saved. Your first call comes tomorrow at 7:30am.` : "Saved"); }
+      catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+  });
   const drawList = async () => {
     const users = await D.listUsers();
     if (!$("#teamList")) return;

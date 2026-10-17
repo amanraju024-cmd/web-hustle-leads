@@ -300,6 +300,20 @@ service cloud.firestore {
         && request.resource.data.visible is bool
         && request.resource.data.at == request.time;
     }
+    // Morning brief: written by the daily job (admin SDK); only admin reads it and sets where it goes
+    match /briefs/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /settings/brief {
+      allow read: if isAdmin();
+      allow write: if isAdmin()
+        && shortString(request.resource.data.get('telegramUser', ''), 40)
+        && shortString(request.resource.data.get('email', ''), 120)
+        && request.resource.data.get('call', true) is bool
+        && request.resource.data.get('message', true) is bool
+        && request.resource.data.get('sendEmail', true) is bool;
+    }
     // Team chat: everyone active reads and posts as themselves (name/role must match their profile); admin can delete
     match /messages/{id} {
       allow read: if isActive();

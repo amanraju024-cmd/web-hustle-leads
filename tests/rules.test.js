@@ -457,3 +457,13 @@ test("search records must have numeric counts", async () => {
   await assertFails(setDoc(doc(as("w1"), "searches/x1"), { uid: "w1", results: "<img src=x onerror=alert(1)>" }));
   await assertSucceeds(setDoc(doc(as("w1"), "searches/x2"), { uid: "w1", results: 12, noWebsite: 3 }));
 });
+
+test("morning brief: only admin reads it, nobody can fake one, settings are admin-only", async () => {
+  await assertFails(setDoc(doc(as("owner"), "briefs/latest"), { text: "fake" }));
+  await assertSucceeds(getDoc(doc(as("owner"), "briefs/latest")));
+  await assertFails(getDoc(doc(as("w1"), "briefs/latest")));
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/brief"), { telegramUser: "@aman", email: "a@b.com", call: true, message: true, sendEmail: false }));
+  await assertFails(setDoc(doc(as("owner"), "settings/brief"), { telegramUser: "@aman", call: "yes" }));
+  await assertFails(setDoc(doc(as("w1"), "settings/brief"), { telegramUser: "@me" }));
+  await assertFails(getDoc(doc(as("w1"), "settings/brief")));
+});

@@ -1,0 +1,27 @@
+name: Morning brief
+
+on:
+  schedule:
+    - cron: '30 23 * * *'   # 23:30 UTC = 7:30am Perth (GitHub can run it a few minutes late)
+  workflow_dispatch:        # "Run workflow" button on GitHub sends one straight away
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Send the morning brief
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          TELEGRAM_USER: ${{ vars.TELEGRAM_USER }}
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          node scripts/morning-brief.mjs
+          rm -f "$GOOGLE_APPLICATION_CREDENTIALS"

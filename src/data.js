@@ -389,6 +389,17 @@ export function watchPresence(cb, onErr) {
   }, onErr);
 }
 
+// ---------- morning brief ----------
+export async function getLatestBrief() {
+  const snap = await getDoc(doc(db, "briefs", "latest"));
+  return snap.exists() ? snap.data() : null;
+}
+export async function getBriefSettings() {
+  const snap = await getDoc(doc(db, "settings", "brief"));
+  return snap.exists() ? snap.data() : {};
+}
+export const saveBriefSettings = (s) => setDoc(doc(db, "settings", "brief"), s);
+
 // ---------- team chat ----------
 export const sendMessage = (me, text) =>
   addDoc(collection(db, "messages"), { uid: me.id, name: me.name, role: me.role, text: text.slice(0, 1000), at: serverTimestamp() });
