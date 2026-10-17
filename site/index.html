@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AR Methods · Websites for Perth businesses</title>
+<meta name="description" content="Simple, mobile-friendly websites for Perth businesses, from $500. We write it, build it and look after it. Call Aman on 0493 523 482.">
+<meta property="og:title" content="AR Methods · Websites for Perth businesses">
+<meta property="og:description" content="Mobile-friendly websites for Perth tradies, cafés, salons and local shops, from $500.">
+<meta property="og:image" content="https://armethods-perth.web.app/apple-touch-icon.png">
+<meta name="theme-color" content="#2a0a10">
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  :root {
+    --ink: #1c1412; --ink-2: #4a3c37; --muted: #7c6b64; --line: #eadfd6;
+    --paper: #fbf7f2; --card: #ffffff; --wine: #6e0f1f; --wine-deep: #2a0a10; --gold: #e2b968; --gold-ink: #1a0e07;
+    --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: var(--wine); }
+  img { max-width: 100%; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 22px; border-radius: 12px; font-weight: 600; text-decoration: none; border: 0; cursor: pointer; font: 600 16px var(--sans); }
+  .btn-gold { background: var(--gold); color: var(--gold-ink); }
+  .btn-gold:hover { filter: brightness(1.06); }
+  .btn-line { border: 1px solid rgba(245,237,230,.35); color: #f5ede6; }
+  .btn-wine { background: var(--wine); color: #fff; }
+
+  /* header + hero */
+  .hero { background: radial-gradient(900px 420px at 85% -10%, rgba(156,28,48,.55), transparent 70%), var(--wine-deep); color: #f5ede6; }
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; }
+  .brand { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
+  .brand b { letter-spacing: .16em; font-size: 15px; white-space: nowrap; }
+  .brand small { white-space: nowrap; }
+  .call-top .short { display: none; }
+  .brand small { display: block; font-size: 10px; letter-spacing: .2em; color: #c9b6a6; }
+  nav.links { display: flex; gap: 22px; align-items: center; font-size: 15px; }
+  nav.links a { color: #e9dcd2; text-decoration: none; }
+  nav.links a:hover { color: #fff; }
+  .hero-body { padding: 56px 0 84px; display: grid; gap: 40px; grid-template-columns: 1.2fr .8fr; align-items: center; }
+  .hero h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.08; letter-spacing: -.02em; margin: 0 0 18px; font-weight: 700; }
+  .hero h1 em { font-style: normal; color: var(--gold); }
+  .hero p.lead { font-size: 18px; color: #e3d4c9; max-width: 34em; margin: 0 0 28px; }
+  .hero .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero .meta { margin-top: 22px; font-size: 14px; color: #bfa999; }
+  .phone-mock { justify-self: center; width: 250px; aspect-ratio: 9/18; border-radius: 34px; background: #120709; border: 8px solid #3a1a20; box-shadow: 0 30px 60px rgba(0,0,0,.45); padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .pm-bar { height: 10px; width: 60px; border-radius: 6px; background: #2b1418; align-self: center; margin-bottom: 6px; }
+  .pm-title { font-weight: 700; font-size: 17px; color: #fff; }
+  .pm-sub { font-size: 12px; color: #c9b6a6; }
+  .pm-stars { color: var(--gold); font-size: 13px; }
+  .pm-call { margin-top: 6px; background: var(--gold); color: var(--gold-ink); font-weight: 700; text-align: center; padding: 11px; border-radius: 10px; font-size: 14px; }
+  .pm-row { height: 9px; border-radius: 5px; background: #2b1418; }
+  .pm-row.short { width: 60%; }
+  .pm-img { flex: 1; border-radius: 12px; background: linear-gradient(135deg, #4a1820, #20090d); }
+
+  section { padding: 76px 0; }
+  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--wine); margin: 0 0 10px; }
+  h2 { font-size: clamp(28px, 3.6vw, 38px); line-height: 1.15; letter-spacing: -.015em; margin: 0 0 14px; }
+  .intro { color: var(--ink-2); max-width: 40em; margin: 0 0 36px; font-size: 17px; }
+
+  .why { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .why div { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+  .why b { display: block; font-size: 17px; margin-bottom: 6px; }
+  .why p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+  .packages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: stretch; }
+  .pkg { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 26px; display: flex; flex-direction: column; }
+  .pkg.pop { border: 2px solid var(--wine); position: relative; }
+  .pkg.pop::before { content: "Most popular"; position: absolute; top: -12px; left: 22px; background: var(--wine); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .pkg h3 { margin: 0; font-size: 19px; }
+  .pkg .price { font-size: 38px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 2px; }
+  .pkg .once { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .pkg ul { list-style: none; padding: 0; margin: 0 0 22px; flex: 1; }
+  .pkg li { padding: 7px 0 7px 26px; position: relative; border-top: 1px solid #f3ece6; font-size: 15px; }
+  .pkg li::before { content: "✓"; position: absolute; left: 2px; color: var(--wine); font-weight: 700; }
+  .pkg .btn { width: 100%; }
+
+  .care { margin-top: 26px; display: flex; gap: 20px; align-items: center; justify-content: space-between; background: #f4ebe2; border-radius: 16px; padding: 22px 26px; flex-wrap: wrap; }
+  .care b { font-size: 17px; }
+  .care p { margin: 4px 0 0; color: var(--ink-2); font-size: 15px; max-width: 46em; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: s; }
+  .steps div { counter-increment: s; padding-top: 4px; }
+  .steps div::before { content: counter(s); display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--wine); color: #fff; font-weight: 700; margin-bottom: 12px; }
+  .steps b { display: block; font-size: 17px; margin-bottom: 4px; }
+  .steps p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+  .extra { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 40px; }
+  .extra div { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+  .extra b { font-size: 17px; }
+  .extra p { margin: 6px 0 0; color: var(--ink-2); font-size: 15px; }
+
+  .faq details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; }
+  .faq summary { cursor: pointer; font-weight: 600; font-size: 16px; }
+  .faq p { margin: 10px 0 0; color: var(--ink-2); }
+
+  .contact { background: var(--wine-deep); color: #f5ede6; }
+  .contact .eyebrow { color: var(--gold); }
+  .contact .intro { color: #d9c7bb; }
+  .contact-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 40px; }
+  .direct a { color: #fff; }
+  .direct .big { font-size: 26px; font-weight: 700; display: block; margin: 4px 0 16px; text-decoration: none; }
+  form.enquiry { background: #fff; color: var(--ink); border-radius: 18px; padding: 24px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  form.enquiry label { font-size: 13px; font-weight: 600; color: var(--ink-2); display: block; margin-bottom: 4px; }
+  form.enquiry input, form.enquiry select, form.enquiry textarea { width: 100%; font: 16px var(--sans); padding: 11px 12px; border: 1px solid #ddd0c5; border-radius: 10px; background: #fff; color: var(--ink); }
+  form.enquiry textarea { min-height: 96px; resize: vertical; }
+  form.enquiry .full { grid-column: 1 / -1; }
+  form.enquiry .hp { position: absolute; left: -9999px; }
+  form.enquiry .btn { width: 100%; }
+  .form-note { font-size: 13px; color: var(--muted); margin: 0; }
+  .form-msg { grid-column: 1 / -1; margin: 0; font-weight: 600; }
+  .form-msg.bad { color: #b3261e; }
+  .thanks { background: #fff; color: var(--ink); border-radius: 18px; padding: 32px; text-align: center; }
+  .thanks b { display: block; font-size: 22px; margin-bottom: 6px; }
+
+  footer.foot { padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+  footer.foot .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  footer.foot a { color: var(--ink-2); }
+
+  @media (max-width: 860px) {
+    nav.links a:not(.btn) { display: none; }
+    .call-top { padding: 10px 16px; }
+    .call-top .long { display: none; } .call-top .short { display: inline; }
+    .hero-body { grid-template-columns: 1fr; padding: 32px 0 60px; }
+    .phone-mock { display: none; }
+    .why, .packages, .steps, .extra, .contact-grid { grid-template-columns: 1fr; }
+    section { padding: 56px 0; }
+    form.enquiry { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="wrap">
+    <header class="top">
+      <a class="brand" href="#"><img src="logo.png" alt="" width="30" height="38"><span><b>AR METHODS</b><small>PERTH WEB DESIGN</small></span></a>
+      <nav class="links"><a href="#packages">Packages</a><a href="#how">How it works</a><a href="#faq">FAQ</a><a class="btn btn-gold call-top" href="tel:0493523482">📞 <span class="long">Call 0493 523 482</span><span class="short">Call</span></a></nav>
+    </header>
+    <div class="hero-body">
+      <div>
+        <h1>A website that gets your Perth business <em>more calls</em>.</h1>
+        <p class="lead">Simple, mobile-friendly websites from $500 for tradies, cafés, salons and local shops. You don't need to write anything or know anything about tech. We build it and look after it.</p>
+        <div class="ctas"><a class="btn btn-gold" href="#contact">Get a free quote</a><a class="btn btn-line" href="tel:0493523482">Call Aman</a></div>
+        <p class="meta">Perth-based · Founded by Aman Raju</p>
+      </div>
+      <div class="phone-mock" aria-hidden="true">
+        <div class="pm-bar"></div>
+        <div class="pm-title">Your Business</div>
+        <div class="pm-sub">Plumber · Willetton</div>
+        <div class="pm-stars">★★★★★ <span class="pm-sub">Google reviews</span></div>
+        <div class="pm-img"></div>
+        <div class="pm-row"></div><div class="pm-row short"></div>
+        <div class="pm-call">📞 Call now</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Why bother</p>
+    <h2>People Google you before they call you.</h2>
+    <p class="intro">When someone needs a plumber, a haircut or a coffee, they search on their phone. If you don't show up, or there's nothing to tap, they call the next business.</p>
+    <div class="why">
+      <div><b>Found on Google</b><p>Show up when locals search for what you do in your suburb, with your hours, location and reviews in one place.</p></div>
+      <div><b>One tap to call</b><p>Most people are on their phone. A big call button and a quick contact form turn visitors into jobs.</p></div>
+      <div><b>Look the part</b><p>A clean, proper website makes people trust you before they've even met you, and it works alongside your Facebook or Instagram.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="packages" style="padding-top:0">
+  <div class="wrap">
+    <p class="eyebrow">Packages</p>
+    <h2>Clear prices. No surprises.</h2>
+    <p class="intro">Pick a package and we'll take it from there. Not sure which one? Send us a message and we'll tell you honestly what you need.</p>
+    <div class="packages" id="pkgList">
+      <div class="pkg"><h3>Starter</h3><div class="price">$500</div><div class="once">one-off</div><ul><li>Mobile-friendly website (up to 5 pages)</li><li>Click-to-call and contact form</li><li>Google Maps and opening hours</li><li>Basic Google search setup</li></ul><a class="btn btn-wine" href="#contact" data-pick="Starter">Choose Starter</a></div>
+      <div class="pkg pop"><h3>Pro</h3><div class="price">$850</div><div class="once">one-off</div><ul><li>Everything in Starter</li><li>Google Business Profile setup</li><li>1 tap-to-review card</li><li>Photo gallery and reviews section</li></ul><a class="btn btn-wine" href="#contact" data-pick="Pro">Choose Pro</a></div>
+      <div class="pkg"><h3>Premium</h3><div class="price">$1,200</div><div class="once">one-off</div><ul><li>Everything in Pro</li><li>Online booking or enquiry system</li><li>3 months care plan included</li><li>Priority support</li></ul><a class="btn btn-wine" href="#contact" data-pick="Premium">Choose Premium</a></div>
+    </div>
+    <div class="care">
+      <div><b>Care plans from $10 a month</b><p>We keep your website running and make small changes for you, like new photos, prices or opening hours, so you never have to touch it.</p></div>
+      <a class="btn btn-wine" href="#contact" data-pick="Care plan">Ask about care plans</a>
+    </div>
+  </div>
+</section>
+
+<section id="how" style="background:#f4ebe2">
+  <div class="wrap">
+    <p class="eyebrow">How it works</p>
+    <h2>Three steps and you're online.</h2>
+    <p class="intro">You run your business. We handle the website.</p>
+    <div class="steps">
+      <div><b>Quick chat</b><p>We call you, ask about your business and what your customers need to know. Ten minutes, tops.</p></div>
+      <div><b>We build it</b><p>We write the words and design the site. Send us your logo and a few photos if you have them. If not, we'll sort it.</p></div>
+      <div><b>You're live</b><p>You check it, we make any changes, and it goes live. On a care plan, we look after it from there.</p></div>
+    </div>
+    <div class="extra">
+      <div><b>Got an old website?</b><p>We'll rebuild it so it loads fast, works properly on phones and looks like it belongs in this decade.</p></div>
+      <div><b>Tap-to-review cards, $50</b><p>Customers tap their phone on the card at your counter and it opens straight to your Google review page. More reviews, higher on Google.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <p class="eyebrow">Questions</p>
+    <h2>Good questions we get asked.</h2>
+    <div class="faq">
+      <details><summary>Do I need to write anything or know about tech?</summary><p>No. We ask you a few questions on the phone and write everything for you. You just check it before it goes live.</p></details>
+      <details><summary>What do I need to give you?</summary><p>Your business name, what you do, where you work and how people contact you. A logo and some photos help, but they're not required.</p></details>
+      <details><summary>I already have a Facebook or Instagram page. Do I still need a website?</summary><p>Your socials are great for people who already follow you. A website is what shows up when new customers search on Google, and it links back to your socials.</p></details>
+      <details><summary>Can you redo my old website?</summary><p>Yes. If your current website doesn't work well on phones or hasn't been touched in years, we'll rebuild it properly.</p></details>
+      <details><summary>What happens if I need changes later?</summary><p>On a care plan (from $10 a month) we make small changes for you. Without one, just ask and we'll quote you.</p></details>
+      <details><summary>Where are you based?</summary><p>We're in Perth and work with businesses right across the metro area.</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="contact">
+  <div class="wrap contact-grid">
+    <div class="direct">
+      <p class="eyebrow">Get started</p>
+      <h2>Let's get your business online.</h2>
+      <p class="intro">Send us a message and we'll call you back. Prefer to talk now?</p>
+      <a class="big" href="tel:0493523482">📞 0493 523 482</a>
+      <p>Or message us on <a href="https://www.instagram.com/ar.methods_/" target="_blank" rel="noopener">Instagram</a>.</p>
+    </div>
+    <div id="formBox">
+      <form class="enquiry" id="enquiry" novalidate>
+        <div><label for="f-name">Your name *</label><input id="f-name" name="name" maxlength="80" autocomplete="name" required></div>
+        <div><label for="f-business">Business name</label><input id="f-business" name="business" maxlength="120" autocomplete="organization"></div>
+        <div><label for="f-phone">Phone</label><input id="f-phone" name="phone" type="tel" maxlength="30" autocomplete="tel"></div>
+        <div><label for="f-email">Email</label><input id="f-email" name="email" type="email" maxlength="120" autocomplete="email"></div>
+        <div><label for="f-suburb">Suburb</label><input id="f-suburb" name="suburb" maxlength="60"></div>
+        <div><label for="f-package">Package</label><select id="f-package" name="package"><option value="">Not sure yet</option><option>Starter</option><option>Pro</option><option>Premium</option><option>Care plan</option></select></div>
+        <div class="full"><label for="f-message">Anything we should know?</label><textarea id="f-message" name="message" maxlength="1500" placeholder="What you do, what you'd like on the website, if you have an old one…"></textarea></div>
+        <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <p class="form-msg" id="formMsg" role="status"></p>
+        <div class="full"><button class="btn btn-gold" type="submit">Send enquiry</button></div>
+        <p class="form-note full">We'll only use your details to get back to you about your website.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>© <span id="yr"></span> AR Methods · Perth, Western Australia</span>
+    <span><a href="tel:0493523482">0493 523 482</a> · <a href="https://www.instagram.com/ar.methods_/" target="_blank" rel="noopener">Instagram</a></span>
+  </div>
+</footer>
+
+<script>
+const FS = "https://firestore.googleapis.com/v1/projects/armethods/databases/(default)/documents";
+const KEY = "AIzaSyDOWd5kIsq3rvGgaO5wLs18oQ5k9HHDjS0";
+document.getElementById("yr").textContent = new Date().getFullYear();
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (n) => "$" + Math.round(n).toLocaleString("en-AU");
+
+// "Choose Pro" etc. fills the package in the form
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pick]");
+  if (b) { const sel = document.getElementById("f-package"); if (![...sel.options].some((o) => o.value === b.dataset.pick)) sel.add(new Option(b.dataset.pick)); sel.value = b.dataset.pick; }
+});
+
+// Live packages and prices (same ones the team sells), the page already shows the defaults
+fetch(`${FS}/settings/packages?key=${KEY}`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+  const vals = d?.fields?.list?.arrayValue?.values;
+  if (!vals?.length) return;
+  const list = vals.map((v) => v.mapValue.fields).map((f) => ({
+    name: f.name?.stringValue || "", price: Number(f.price?.integerValue ?? f.price?.doubleValue ?? 0),
+    items: (f.items?.arrayValue?.values || []).map((x) => x.stringValue).filter(Boolean),
+  })).filter((p) => p.name && p.price > 0);
+  if (!list.length) return;
+  const pop = list.length >= 3 ? 1 : -1;
+  document.getElementById("pkgList").innerHTML = list.map((p, i) => `<div class="pkg ${i === pop ? "pop" : ""}"><h3>${esc(p.name)}</h3><div class="price">${money(p.price)}</div><div class="once">one-off</div>
+    <ul>${p.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><a class="btn btn-wine" href="#contact" data-pick="${esc(p.name)}">Choose ${esc(p.name)}</a></div>`).join("");
+  const sel = document.getElementById("f-package");
+  sel.innerHTML = `<option value="">Not sure yet</option>${list.map((p) => `<option>${esc(p.name)}</option>`).join("")}<option>Care plan</option>`;
+}).catch(() => {});
+
+// Enquiry form → Firestore (rules validate every field; createdAt is set by the server)
+document.getElementById("enquiry").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target, msg = document.getElementById("formMsg"), btn = f.querySelector("button");
+  const v = (n) => (f.elements[n].value || "").trim();
+  msg.className = "form-msg"; msg.textContent = "";
+  if (v("website")) return; // bots fill the hidden field
+  if (!v("name")) { msg.className = "form-msg bad"; msg.textContent = "Please add your name."; return f.elements.name.focus(); }
+  if (!v("phone") && !v("email")) { msg.className = "form-msg bad"; msg.textContent = "Please add a phone number or email so we can get back to you."; return f.elements.phone.focus(); }
+  if (v("email") && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("email"))) { msg.className = "form-msg bad"; msg.textContent = "That email doesn't look right."; return f.elements.email.focus(); }
+  const fields = { status: { stringValue: "new" } };
+  for (const n of ["name", "business", "phone", "email", "suburb", "message", "package"]) fields[n] = { stringValue: v(n) };
+  const id = Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => b.toString(16).padStart(2, "0")).join("");
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    const r = await fetch(`${FS}:commit?key=${KEY}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ writes: [{
+      update: { name: `projects/armethods/databases/(default)/documents/enquiries/${id}`, fields },
+      updateTransforms: [{ fieldPath: "createdAt", setToServerValue: "REQUEST_TIME" }], currentDocument: { exists: false } }] }) });
+    if (!r.ok) throw new Error(r.status);
+    document.getElementById("formBox").innerHTML = `<div class="thanks"><b>Thanks, ${esc(v("name").split(" ")[0])}!</b><p>We've got your message and we'll call you soon. If it's urgent, call <a href="tel:0493523482">0493 523 482</a>.</p></div>`;
+  } catch {
+    btn.disabled = false; btn.textContent = "Send enquiry";
+    msg.className = "form-msg bad"; msg.innerHTML = `Sorry, that didn't send. Please call <a href="tel:0493523482">0493 523 482</a> instead.`;
+  }
+});
+</script>
+</body>
+</html>

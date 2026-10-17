@@ -390,7 +390,7 @@ const START_STEPS = () => [
     <dl class="start-outcomes">
       <dt><span class="status s-Noanswer">No answer</span></dt><dd>Didn't pick up. It comes back for you to try again in 3 days.</dd>
       <dt><span class="status s-Callback">Call back</span></dt><dd>They said "call me later". Tap it, <b>pick the day and time</b> they said, then tap <b>Call back again</b>. It shows on Home when it's due.</dd>
-      <dt><span class="status s-Interested">Interested</span></dt><dd>They want to hear more. Call or text them back within 3 days so they don't go cold.</dd>
+      <dt><span class="status s-Interested">Interested</span></dt><dd>They want to hear more. Ask for their email and type it into <b>Their email</b> on the card before you tap Interested. The app then sends them friendly follow-up emails by itself until they reply. Still call or text them back within 3 days.</dd>
       <dt><span class="status s-Notinterested">Not interested</span></dt><dd>They said no. That's normal, move on to the next one.</dd>
       <dt><span class="status s-Won">Won</span></dt><dd>They said yes! Tap it, <b>pick the package</b> (or type the price), then tap <b>Won again</b>.</dd></dl>
     <p class="muted small">Points: <b>1</b> for each business you call in a day, <b>+3</b> when they're interested, <b>+10</b> for a sale. Calling the same business twice in one day doesn't add more.</p>` },
@@ -1168,6 +1168,7 @@ function myLeadCard(l, now) {
           <p class="small muted">Log this call as:</p>
           <div class="outcomes">${D.CALL_STATUSES.map((s) => `<button class="out o-${s.replace(/\s/g, "")}" data-status="${esc(s)}">${esc(s)}</button>`).join("")}</div>
           <button class="linkbtn" data-save>Save notes only</button>
+          ${followUpHtml(l)}
         </div>
         ${scriptHtml(l)}
       </div>
@@ -1202,8 +1203,50 @@ async function showTexts(lead) {
   }));
 }
 
+// Automatic follow-up emails: the worker adds the business's email; the server sends 4 emails over 10 days
+const FU_STEPS = 4;
+const FU_ENDED = { replied: "they replied by email (check Aman's inbox)", unsubscribed: "they unsubscribed", done: "all 4 emails sent",
+  status: "the lead moved on from Interested", bounced: "the email address didn't work" };
+function followUpHtml(l) {
+  const f = l.followUp;
+  let line = "";
+  if (f?.on) line = `<p class="fu-line on">📧 Auto follow-ups on · ${f.step || 0} of ${FU_STEPS} sent <button class="linkbtn" data-fu-stop>Stop</button></p>`;
+  else if (f?.reason) line = `<p class="fu-line">📧 Follow-ups finished: ${esc(FU_ENDED[f.reason] || f.reason)}</p>`;
+  else if (l.status === "Interested") line = `<p class="fu-line">${l.email ? `<button class="ghost small" data-fu-start>📧 Start auto follow-ups</button>` : "Add their email and they'll get friendly follow-up emails automatically until they reply."}</p>`;
+  return `<div class="fu">
+    <label for="e-${esc(l.id)}">Their email <span class="muted small">(for automatic follow-ups)</span></label>
+    <div class="inline"><input type="email" id="e-${esc(l.id)}" data-email maxlength="120" placeholder="owner@business.com.au" value="${esc(l.email || "")}">
+      <button class="ghost small" data-email-save>Save</button></div>
+    ${line}
+  </div>`;
+}
+const okEmail = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+
 function wireLeadCard(card) {
   const lead = state.myLeads.find((l) => l.id === card.dataset.id);
+  const emailIn = card.querySelector("[data-email]");
+  card.querySelector("[data-email-save]")?.addEventListener("click", async (e) => {
+    const v = emailIn.value.trim();
+    if (v && !okEmail(v)) return toast("That email doesn't look right", "bad");
+    await busy(e.currentTarget, "Saving", async () => {
+      try { await D.saveLeadEmail(lead.id, v); lead.email = v; toast("Email saved"); } catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+    drawMyLeads();
+  });
+  card.querySelector("[data-fu-start]")?.addEventListener("click", async (e) => {
+    const v = emailIn.value.trim() || lead.email;
+    if (!okEmail(v || "")) return toast("Add their email first", "bad");
+    await busy(e.currentTarget, "Starting", async () => {
+      try { await D.startFollowUp(state.me, lead.id, v); toast(`Follow-ups started. ${lead.name} gets the first email within 2 hours.`); } catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+    drawMyLeads();
+  });
+  card.querySelector("[data-fu-stop]")?.addEventListener("click", async (e) => {
+    await busy(e.currentTarget, "Stopping", async () => {
+      try { await D.stopFollowUp(lead.id); toast("Follow-ups stopped"); } catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+    drawMyLeads();
+  });
   card.querySelector("[data-texts]")?.addEventListener("click", () => showTexts(lead));
   card.querySelectorAll("[data-pay]").forEach((b) => b.addEventListener("click", async () => {
     if (!isAdmin() || b.dataset.pay === payOf(lead)) return;
@@ -1253,6 +1296,12 @@ function wireLeadCard(card) {
         toast(got.bonusW ? `WON ${money(got.value)}. You'll earn ${money(commissionFor(got.value))} once they pay.` : `Logged: ${status} (+${got.points} pt${got.points === 1 ? "" : "s"})${why}`);
         if (got.bonusW || got.bonusI) confetti();
         if (got.bonusW) showAfterWon(lead, got.value);
+        // Interested + an email → follow-up emails start by themselves
+        const em = emailIn?.value.trim() || "";
+        if (status === "Interested" && !lead.followUp?.on && okEmail(em)) {
+          try { await D.startFollowUp(state.me, lead.id, em); toast(`Logged: Interested. Follow-up emails to ${em} start within 2 hours.`); }
+          catch (err) { console.error(err); }
+        }
         checkBadges();
       } catch (err) { console.error(err); toast(D.authMessage(err), "bad"); }
     });
@@ -1447,6 +1496,7 @@ async function screenAdmin() {
     ${adminNav("admin")}
     <h1 class="page">Team performance</h1>
     ${new Date(`${today}T12:00:00+08:00`).getUTCDay() === 1 ? `<div class="notice info">📊 Last week's report is ready. <a href="#report">View it</a></div>` : ""}
+    <div id="enqBox"></div>
     <div id="briefBox"></div>
     <section class="card live-card"><h2>Who's on right now</h2><div id="liveNow"><div class="loading"><span class="spinner"></span></div></div></section>
     <div id="kpis"></div>
@@ -1466,6 +1516,35 @@ async function screenAdmin() {
     </section>`;
 
   drawMoney(today, rid);
+  const drawEnquiries = () => D.getEnquiries().then((list) => {
+    const box = $("#enqBox");
+    if (!box || rid !== state.routeId) return;
+    if (!list.length) { box.innerHTML = ""; return; }
+    const workers = users.filter((u) => u.active);
+    box.innerHTML = `<section class="card enq-card"><h2>🌐 Website enquiries <span class="enq-count">${list.length} new</span></h2>
+      ${list.map((q) => `<article class="enq" data-enq="${esc(q.id)}">
+        <div class="enq-head"><b>${esc(q.business || q.name)}</b><span class="muted small">${esc(fmtDateTime(q.createdAt))}</span></div>
+        <p class="muted small">${esc(q.name)}${q.suburb ? ` · ${esc(q.suburb)}` : ""}${q.package ? ` · wants <b>${esc(q.package)}</b>` : ""}</p>
+        <p class="row">${q.phone ? phoneHtml(q.phone) : ""} ${q.email ? `<a href="mailto:${esc(q.email)}">${esc(q.email)}</a>` : ""}</p>
+        ${q.message ? `<p class="enq-msg">${esc(q.message)}</p>` : ""}
+        <div class="toolbar"><select data-enq-to aria-label="Give to"><option value="">Add to the leads pool</option>${workers.map((u) => `<option value="${esc(u.id)}">Give to ${esc(u.name)}</option>`).join("")}</select>
+          <button class="primary small" data-enq-add>Add</button><button class="linkbtn" data-enq-skip>Dismiss</button></div>
+      </article>`).join("")}</section>`;
+    box.querySelectorAll("[data-enq]").forEach((el) => {
+      const q = list.find((x) => x.id === el.dataset.enq);
+      el.querySelector("[data-enq-add]").addEventListener("click", async (e) => {
+        const to = workers.find((u) => u.id === el.querySelector("[data-enq-to]").value) || null;
+        await busy(e.currentTarget, "Adding", async () => {
+          try { await D.enquiryToLead(state.me, q, to); toast(`${q.business || q.name} added${to ? ` for ${to.name}` : " to the pool"}`); drawEnquiries(); }
+          catch (err) { toast(D.authMessage(err), "bad"); }
+        });
+      });
+      el.querySelector("[data-enq-skip]").addEventListener("click", async () => {
+        try { await D.setEnquiryStatus(q.id, "dismissed"); drawEnquiries(); } catch (err) { toast(D.authMessage(err), "bad"); }
+      });
+    });
+  }).catch(() => {});
+  drawEnquiries();
   D.getLatestBrief().then((b) => {
     const box = $("#briefBox");
     if (!box || rid !== state.routeId) return;

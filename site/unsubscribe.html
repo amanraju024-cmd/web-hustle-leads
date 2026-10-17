@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Unsubscribe · AR Methods</title>
+<link rel="icon" href="favicon.png">
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fbf7f2; color: #1c1412; font: 16px/1.6 "Geist", system-ui, -apple-system, sans-serif; padding: 20px; box-sizing: border-box; }
+  .box { max-width: 440px; background: #fff; border: 1px solid #eadfd6; border-radius: 18px; padding: 32px; text-align: center; }
+  h1 { font-size: 22px; margin: 12px 0 8px; }
+  p { color: #4a3c37; margin: 0 0 8px; }
+  a { color: #6e0f1f; }
+  .logo { width: 44px; height: 44px; border-radius: 12px; background: #2a0a10; display: inline-grid; place-items: center; }
+</style>
+</head>
+<body>
+<div class="box">
+  <span class="logo"><img src="logo.png" alt="" width="22" height="28"></span>
+  <h1 id="title">Unsubscribing…</h1>
+  <p id="text">One moment.</p>
+</div>
+<script>
+(async () => {
+  const p = new URLSearchParams(location.search), u = p.get("u"), t = p.get("t");
+  const title = document.getElementById("title"), text = document.getElementById("text");
+  if (!u || !t || !/^[\w-]{1,200}$/.test(u)) { title.textContent = "This link doesn't look right"; text.innerHTML = 'Reply to the email with "unsubscribe" and we\'ll take you off the list.'; return; }
+  try {
+    const r = await fetch("https://firestore.googleapis.com/v1/projects/armethods/databases/(default)/documents:commit?key=AIzaSyDOWd5kIsq3rvGgaO5wLs18oQ5k9HHDjS0", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ writes: [{ update: { name: `projects/armethods/databases/(default)/documents/unsubs/${u}`, fields: { t: { stringValue: t } } },
+        updateTransforms: [{ fieldPath: "at", setToServerValue: "REQUEST_TIME" }], currentDocument: { exists: false } }] }) });
+    // a second click finds the document already there, which still means unsubscribed
+    if (!r.ok && r.status !== 409) throw new Error(r.status);
+    title.textContent = "You're unsubscribed";
+    text.textContent = "You won't get any more follow-up emails from AR Methods. Sorry for the bother.";
+  } catch {
+    title.textContent = "That didn't work";
+    text.innerHTML = 'Please reply to the email with "unsubscribe" and we\'ll take you off the list straight away.';
+  }
+})();
+</script>
+</body>
+</html>

@@ -389,6 +389,37 @@ export function watchPresence(cb, onErr) {
   }, onErr);
 }
 
+// ---------- automatic follow-up emails (sent by scripts/follow-ups.mjs) ----------
+export const saveLeadEmail = (leadId, email) =>
+  updateDoc(doc(db, "leads", leadId), { email, updatedAt: serverTimestamp() });
+export const startFollowUp = (me, leadId, email) =>
+  updateDoc(doc(db, "leads", leadId), { email, followUp: { on: true, step: 0, startedAt: serverTimestamp(), by: me.id, byName: me.name }, updatedAt: serverTimestamp() });
+export const stopFollowUp = (leadId) =>
+  updateDoc(doc(db, "leads", leadId), { "followUp.on": false, updatedAt: serverTimestamp() });
+
+// ---------- website enquiries (public form on the AR Methods website) ----------
+export async function getEnquiries() {
+  const snap = await getDocs(query(collection(db, "enquiries"), where("status", "==", "new")));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+}
+export const setEnquiryStatus = (id, status) => updateDoc(doc(db, "enquiries", id), { status });
+/** Admin: turns an enquiry into a lead (in the pool, or given straight to a worker). */
+export async function enquiryToLead(me, enq, worker) {
+  const id = `web_${enq.id}`;
+  const lead = { name: enq.business || enq.name, phone: enq.phone, suburb: enq.suburb, source: "Website", category: "Website enquiry" };
+  const b = writeBatch(db);
+  b.set(doc(db, "leads", id), {
+    ...leadDoc(lead, worker ? worker.id : null, worker ? worker.name : "", me.id),
+    email: enq.email || "", contactName: enq.name,
+    notes: [`Website enquiry from ${enq.name}`, enq.package ? `Interested in: ${enq.package}` : "", enq.message].filter(Boolean).join("\n").slice(0, 2000),
+  });
+  if (worker) b.set(doc(db, "claims", id), { uid: worker.id, name: worker.name, at: serverTimestamp() });
+  b.update(doc(db, "enquiries", enq.id), { status: "added" });
+  await b.commit();
+  logEvent(me, "pool", `added website enquiry ${lead.name}${worker ? ` for ${worker.name}` : " to the pool"}`);
+  return id;
+}
+
 // ---------- morning brief ----------
 export async function getLatestBrief() {
   const snap = await getDoc(doc(db, "briefs", "latest"));

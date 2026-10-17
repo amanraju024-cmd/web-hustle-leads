@@ -479,3 +479,45 @@ test("iPhone spoken brief: fetchable by its secret id, never listable or writabl
   await assertFails(setDoc(doc(as("owner"), "settings/brief"), { teamEmails: "yes" }));
   await assertFails(setDoc(doc(as("owner"), "settings/brief"), { speakKey: "a".repeat(80) }));
 });
+
+// ---------- website enquiries, follow-ups, unsubscribe ----------
+test("anyone can send a website enquiry, but only a valid one, and only admin reads them", async () => {
+  const anon = env.unauthenticatedContext().firestore();
+  const ok = { name: "Bob", business: "Bob's Plumbing", phone: "0412 345 678", email: "", suburb: "Bibra Lake", message: "Need a site", package: "Pro", status: "new", createdAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(anon, "enquiries/e1"), ok));
+  await assertFails(setDoc(doc(anon, "enquiries/e2"), { ...ok, phone: "", email: "" }));              // no way to contact them
+  await assertFails(setDoc(doc(anon, "enquiries/e3"), { ...ok, status: "added" }));
+  await assertFails(setDoc(doc(anon, "enquiries/e4"), { ...ok, hacked: true }));
+  await assertFails(setDoc(doc(anon, "enquiries/e5"), { ...ok, message: "x".repeat(2000) }));
+  await assertFails(setDoc(doc(anon, "enquiries/e6"), { ...ok, email: "not-an-email" }));
+  await assertFails(getDoc(doc(anon, "enquiries/e1")));
+  await assertFails(getDoc(doc(as("w1"), "enquiries/e1")));
+  await assertFails(setDoc(doc(anon, "enquiries/e1"), { ...ok, name: "Changed" }));                 // write-once
+  await assertSucceeds(getDoc(doc(as("owner"), "enquiries/e1")));
+  await assertSucceeds(getDoc(doc(anon, "settings/packages")));                                      // packages show on the website
+});
+
+test("worker adds an email and starts or stops follow-ups on their own lead only", async () => {
+  const start = (email) => ({ email, followUp: { on: true, step: 0, startedAt: serverTimestamp(), by: "w1", byName: "Sam" }, updatedAt: serverTimestamp() });
+  await assertFails(updateDoc(doc(as("w1"), "leads/sam1"), start("")));                              // needs an email
+  await assertFails(updateDoc(doc(as("w1"), "leads/sam1"), start("bad email")));
+  await assertFails(updateDoc(doc(as("w2"), "leads/sam1"), start("bob@x.com")));                     // not their lead
+  await assertFails(updateDoc(doc(as("w1"), "leads/sam1"), { ...start("bob@x.com"), followUp: { on: true, step: 3, startedAt: serverTimestamp(), by: "w1", byName: "Sam" } }));
+  await assertFails(updateDoc(doc(as("w1"), "leads/sam1"), { ...start("bob@x.com"), status: "Won" })); // can't sneak a status change in
+  await assertSucceeds(updateDoc(doc(as("w1"), "leads/sam1"), start("bob@x.com")));
+  // the server moves it along and adds the unsubscribe token
+  await env.withSecurityRulesDisabled((c) => updateDoc(doc(c.firestore(), "leads/sam1"), { "followUp.step": 2, "followUp.token": "t".repeat(36) }));
+  await assertFails(updateDoc(doc(as("w1"), "leads/sam1"), { "followUp.step": 0 }));
+  await assertFails(updateDoc(doc(as("w1"), "leads/sam1"), { "followUp.on": false, "followUp.token": "mine" }));
+  await assertSucceeds(updateDoc(doc(as("w1"), "leads/sam1"), { "followUp.on": false, updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(as("w1"), "leads/sam1"), { email: "new@x.com", updatedAt: serverTimestamp() }));
+});
+
+test("unsubscribe link works only with the right token", async () => {
+  await env.withSecurityRulesDisabled((c) => updateDoc(doc(c.firestore(), "leads/sam1"), { email: "bob@x.com", followUp: { on: true, step: 1, token: "a".repeat(36) } }));
+  const anon = env.unauthenticatedContext().firestore();
+  await assertFails(setDoc(doc(anon, "unsubs/sam1"), { t: "b".repeat(36), at: serverTimestamp() }));
+  await assertFails(setDoc(doc(anon, "unsubs/pool1"), { t: "a".repeat(36), at: serverTimestamp() }));   // lead without follow-ups
+  await assertSucceeds(setDoc(doc(anon, "unsubs/sam1"), { t: "a".repeat(36), at: serverTimestamp() }));
+  await assertFails(getDoc(doc(anon, "unsubs/sam1")));
+});

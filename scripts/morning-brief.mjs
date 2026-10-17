@@ -63,6 +63,14 @@ export async function buildBrief(now = new Date()) {
   const careToday = care.dueSoon.filter((p) => p.due === today);
   const rewardsOwed = refs.filter((l) => (l.gotWon ?? l.status === "Won") && !l.referralRewardPaid).length;
   const deals = wonCalls.filter((c) => c.day === day && c.value > 0);
+  // 🌐 website enquiries yesterday + 📧 automatic follow-ups
+  const dayStart = new Date(`${day}T00:00:00+08:00`), dayEnd = new Date(`${today}T00:00:00+08:00`);
+  const [enqY, enqOpen, fuOn, fuReplied] = await Promise.all([
+    db.collection("enquiries").where("createdAt", ">=", dayStart).where("createdAt", "<", dayEnd).get().then((q) => q.size).catch(() => 0),
+    db.collection("enquiries").where("status", "==", "new").get().then((q) => q.size).catch(() => 0),
+    db.collection("leads").where("followUp.on", "==", true).get().then((q) => q.size).catch(() => 0),
+    db.collection("leads").where("followUp.reason", "==", "replied").get().then((q) => q.docs.filter((d) => ms(d.data().followUp?.endedAt) >= dayStart.getTime()).map((d) => d.data().name)).catch(() => []),
+  ]);
 
   // 📞 short version for the phone call (read out loud)
   const say = [
@@ -73,6 +81,8 @@ export async function buildBrief(now = new Date()) {
     unpaidTotal ? `${money(unpaidTotal)} is still waiting to be paid.` : "",
     cold.length ? `${plural(cold.length, "interested lead")} ${cold.length === 1 ? "is" : "are"} going cold.` : "",
     dueToday.length ? `${plural(dueToday.length, "call back")} ${dueToday.length === 1 ? "is" : "are"} due today.` : "",
+    enqY ? `You got ${plural(enqY, "new enquiry", "new enquiries")} from the website.` : "",
+    fuReplied.length ? `${plural(fuReplied.length, "lead")} replied to the follow-up emails.` : "",
     "Have a big day.",
   ].filter(Boolean).join(" ");
 
@@ -96,6 +106,8 @@ export async function buildBrief(now = new Date()) {
     `• Commission owed this month (paid deals): ${money(commissionOwed)}`,
     `• Care plans: ${money(care.mrr)}/month from ${care.active} client${care.active === 1 ? "" : "s"}${careToday.length ? `, ${careToday.length} payment${careToday.length === 1 ? "" : "s"} due today` : ""}`,
     rewardsOwed ? `• Referral rewards to pay: ${money(rewardsOwed * REFERRAL_REWARD)}` : "",
+    `• Website enquiries: ${enqY} yesterday${enqOpen ? `, ${enqOpen} waiting in Admin` : ""}`,
+    `• Auto follow-ups running: ${fuOn}${fuReplied.length ? ` · replied yesterday: ${fuReplied.join(", ")} (check your inbox)` : ""}`,
     "",
     "Open the app: https://armethods.web.app",
   ].filter((l, i, a) => l !== "" || (a[i - 1] !== "" && i > 0));

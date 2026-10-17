@@ -51,5 +51,17 @@ jobs:
           fi
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
-          npx firebase deploy --only hosting,firestore:rules --project armethods --non-interactive
+          npx firebase deploy --only hosting:armethods,firestore:rules --project armethods --non-interactive
+          rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
+      # The public AR Methods website (armethods-perth.web.app). Kept separate so it can never block the app deploy.
+      - name: Deploy the public website (armethods-perth.web.app)
+        continue-on-error: true
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npx firebase hosting:sites:get armethods-perth --project armethods >/dev/null 2>&1 \
+            || npx firebase hosting:sites:create armethods-perth --project armethods --non-interactive
+          npx firebase deploy --only hosting:armethods-perth --project armethods --non-interactive
           rm -f "$GOOGLE_APPLICATION_CREDENTIALS"

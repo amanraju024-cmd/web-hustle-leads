@@ -82,7 +82,7 @@ service cloud.firestore {
     }
     // Website packages (Starter / Pro / Premium): everyone reads, admin edits
     match /settings/packages {
-      allow read: if isActive();
+      allow read: if true; // shown on the public website
       allow write: if isAdmin() && request.resource.data.list is list && request.resource.data.list.size() <= 6;
     }
     // Old website finder: shared results of website checks (team reuses them for 60 days)
@@ -167,6 +167,22 @@ service cloud.firestore {
         && request.resource.data.assignedTo == request.auth.uid
         && shortString(request.resource.data.notes, 2000)
         && (onlyChanged(['notes', 'callbackAt', 'updatedAt']) || callLogged());
+      // Worker adds the business's email and switches automatic follow-up emails on or off
+      allow update: if isActive()
+        && resource.data.assignedTo == request.auth.uid
+        && request.resource.data.assignedTo == request.auth.uid
+        && onlyChanged(['email', 'followUp', 'updatedAt'])
+        && validEmail(request.resource.data.get('email', ''))
+        && followUpOk(request.resource.data.get('followUp', null), resource.data.get('followUp', null))
+        && (request.resource.data.get('followUp', null) == null || request.resource.data.followUp.on == false || request.resource.data.get('email', '') != '');
+    }
+    function validEmail(e) { return e is string && e.size() <= 120 && (e == '' || e.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')); }
+    // a worker can start follow-ups (step 0) or stop them (only 'on' flips to false); the server job moves the steps along
+    function followUpOk(f, old) {
+      return f == null
+        || (f is map && f.keys().hasOnly(['on', 'step', 'startedAt', 'by', 'byName'])
+          && f.on == true && f.step == 0 && f.by == request.auth.uid && shortString(f.byName, 80) && f.startedAt == request.time)
+        || (f is map && old is map && f.on == false && f.diff(old).affectedKeys().hasOnly(['on']));
     }
 
     // ---------- call log (source of all stats) ----------
@@ -301,6 +317,29 @@ service cloud.firestore {
         && request.resource.data.at == request.time;
     }
     // Morning brief: written by the daily job (admin SDK); only admin reads it and sets where it goes
+    // Website enquiry form (public, no login): validated, write-once, admin reads and handles them
+    match /enquiries/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['name', 'business', 'phone', 'email', 'suburb', 'message', 'package', 'createdAt', 'status'])
+        && shortString(request.resource.data.name, 80) && request.resource.data.name.size() > 0
+        && shortString(request.resource.data.get('business', ''), 120)
+        && shortString(request.resource.data.get('phone', ''), 30)
+        && validEmail(request.resource.data.get('email', ''))
+        && (request.resource.data.get('phone', '') != '' || request.resource.data.get('email', '') != '')
+        && shortString(request.resource.data.get('suburb', ''), 60)
+        && shortString(request.resource.data.get('message', ''), 1500)
+        && shortString(request.resource.data.get('package', ''), 40)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'new';
+      allow read, update, delete: if isAdmin();
+    }
+    // Unsubscribe link in follow-up emails: needs the secret token the server put on the lead
+    match /unsubs/{leadId} {
+      allow create: if request.resource.data.keys().hasOnly(['t', 'at'])
+        && request.resource.data.at == request.time
+        && request.resource.data.t is string && request.resource.data.t.size() >= 20
+        && get(/databases/$(database)/documents/leads/$(leadId)).data.followUp.token == request.resource.data.t;
+      allow read: if isAdmin();
+    }
     match /briefs/{id} {
       allow read: if isAdmin();
       allow write: if false;
