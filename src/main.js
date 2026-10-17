@@ -1527,19 +1527,25 @@ async function screenAdmin() {
         <p class="muted small">${esc(q.name)}${q.suburb ? ` · ${esc(q.suburb)}` : ""}${q.package ? ` · wants <b>${esc(q.package)}</b>` : ""}</p>
         <p class="row">${q.phone ? phoneHtml(q.phone) : ""} ${q.email ? `<a href="mailto:${esc(q.email)}">${esc(q.email)}</a>` : ""}</p>
         ${q.message ? `<p class="enq-msg">${esc(q.message)}</p>` : ""}
-        <div class="toolbar"><select data-enq-to aria-label="Give to"><option value="">Add to the leads pool</option>${workers.map((u) => `<option value="${esc(u.id)}">Give to ${esc(u.name)}</option>`).join("")}</select>
-          <button class="primary small" data-enq-add>Add</button><button class="linkbtn" data-enq-skip>Dismiss</button></div>
+        ${/^NFC order PAID/i.test(q.package || "") ? `<div class="toolbar"><span class="pay-tag pay-paid">💳 Paid NFC order</span><button class="primary small" data-enq-posted>Mark as posted</button></div>`
+          : `<div class="toolbar"><select data-enq-to aria-label="Give to"><option value="">Add to the leads pool</option>${workers.map((u) => `<option value="${esc(u.id)}">Give to ${esc(u.name)}</option>`).join("")}</select>
+          <button class="primary small" data-enq-add>Add</button><button class="linkbtn" data-enq-skip>Dismiss</button></div>`}
       </article>`).join("")}</section>`;
     box.querySelectorAll("[data-enq]").forEach((el) => {
       const q = list.find((x) => x.id === el.dataset.enq);
-      el.querySelector("[data-enq-add]").addEventListener("click", async (e) => {
+      el.querySelector("[data-enq-posted]")?.addEventListener("click", async (e) => {
+        await busy(e.currentTarget, "Saving", async () => {
+          try { await D.setEnquiryStatus(q.id, "posted"); toast(`${q.business || q.name}: marked as posted`); drawEnquiries(); } catch (err) { toast(D.authMessage(err), "bad"); }
+        });
+      });
+      el.querySelector("[data-enq-add]")?.addEventListener("click", async (e) => {
         const to = workers.find((u) => u.id === el.querySelector("[data-enq-to]").value) || null;
         await busy(e.currentTarget, "Adding", async () => {
           try { await D.enquiryToLead(state.me, q, to); toast(`${q.business || q.name} added${to ? ` for ${to.name}` : " to the pool"}`); drawEnquiries(); }
           catch (err) { toast(D.authMessage(err), "bad"); }
         });
       });
-      el.querySelector("[data-enq-skip]").addEventListener("click", async () => {
+      el.querySelector("[data-enq-skip]")?.addEventListener("click", async () => {
         try { await D.setEnquiryStatus(q.id, "dismissed"); drawEnquiries(); } catch (err) { toast(D.authMessage(err), "bad"); }
       });
     });

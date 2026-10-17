@@ -95,11 +95,12 @@ async function main() {
   for (const d of enq) {
     const q = d.data();
     try {
-      await send({ to: process.env.BRIEF_EMAIL || FROM, fromName: "AR Methods website", subject: `🌐 New website enquiry: ${q.business || q.name}`,
+      const paidNfc = /^NFC order PAID/i.test(q.package || "");
+      await send({ to: process.env.BRIEF_EMAIL || FROM, fromName: "AR Methods website", subject: paidNfc ? `💳 New NFC order (paid): ${q.business || q.name}` : `🌐 New website enquiry: ${q.business || q.name}`,
         text: [`${q.name}${q.business ? ` from ${q.business}` : ""}${q.suburb ? ` (${q.suburb})` : ""} wants a website.`, "",
           q.phone ? `Phone: ${q.phone}` : "", q.email ? `Email: ${q.email}` : "", q.package ? `Package: ${q.package}` : "", q.message ? `\n"${q.message}"` : "", "",
-          "Add it to your leads: https://armethods.web.app/#admin"].filter((l) => l !== "").join("\n") });
-      if (q.email) await send({ to: q.email, fromName: "AR Methods", ...enquiryReply(q) });
+          paidNfc ? "Program the cards to the links above and post them. Details are in Admin: https://armethods.web.app/#admin" : "Add it to your leads: https://armethods.web.app/#admin"].filter((l) => l !== "").join("\n") });
+      if (q.email && !paidNfc) await send({ to: q.email, fromName: "AR Methods", ...enquiryReply(q) }); // paid orders already get Stripe's receipt
       if (!DRY) await d.ref.update({ notified: true, notifiedAt: FieldValue.serverTimestamp() });
       log.push(`enquiry: ${q.business || q.name} handled`);
     } catch (e) { log.push(`enquiry: ${q.business || q.name} failed ${e.message}`); }
