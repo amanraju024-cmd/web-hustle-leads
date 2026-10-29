@@ -20,54 +20,62 @@ function groupOf(category) {
   return "other";
 }
 
+// Written the way people actually talk on the phone in Perth: short, a question first, never a speech.
 const HOOKS = {
-  beauty: "most people pick a salon by searching on Google and looking at photos, and right now they can't book you or see your work in one place",
-  food: "people look up your menu and opening hours on Google before they come in, and right now there's nowhere for them to see it properly",
-  trades: "when someone's pipes burst or power goes out, they Google a tradie and call the first one with a proper website, and right now that isn't you",
-  health: "new patients and members check your services and book online before they ever call, and right now they can't do that with you",
-  other: "most customers Google a business before they buy, and right now there's no proper website for them to land on",
+  beauty: (sub) => `when someone in ${sub} wants a new hairdresser or nails done, they Google it and go with whoever has photos and a way to book. If you're not there, they never even find out how good you are`,
+  food: (sub) => `people in ${sub} check the menu and hours on their phone before they head out. If they can't find it, they just go to the place that comes up first`,
+  trades: (sub) => `when someone in ${sub} has water through the ceiling at 9pm, they Google it and ring whoever looks legit first. Right now that's probably someone else, not you`,
+  health: (sub) => `new clients in ${sub} look you up and want to see your services and book before they ever pick up the phone`,
+  other: (sub) => `most people in ${sub} look a business up on Google before they ring, and if there's nothing there they just move on to the next one`,
 };
 const FEATURES = {
-  beauty: "your services and prices, a gallery of your work, reviews, and a Book Now button",
-  food: "your menu, opening hours, photos, reviews and a map",
-  trades: "your services, the suburbs you cover, reviews, and a big Call Now button",
-  health: "your services, team, reviews and online booking",
-  other: "your services, reviews, contact details and a clear call to action",
+  beauty: "your services and prices, photos of your work, your Google reviews and a Book button",
+  food: "your menu, hours, photos, reviews and a map so people can find you",
+  trades: "what you do, the suburbs you cover, your reviews and a big Call button",
+  health: "your services, your team, reviews and online booking",
+  other: "what you do, your reviews, your contact details and a Call button",
 };
+const PEOPLE = { beauty: "salons", food: "cafés and restaurants", trades: "tradies", health: "clinics", other: "local businesses" };
 
 export function scriptFor(lead, me) {
   const g = groupOf(lead.category);
   const first = (me?.name || "").split(" ")[0] || "I";
+  const sub = lead.suburb || "your area";
+  const opener = `Hey, is that the owner of ${lead.name}? Sorry, I'll be quick. It's ${first} from AR Methods, we're a small web design team here in Perth. Have you got 30 seconds? You can tell me to rack off after.`;
+  const close = `Easiest thing: I'll text you a couple of sites we've done for other ${PEOPLE[g]} and the price, and you have a look when you've got a minute. Or if it's easier, I can give you a ring back tomorrow. Which suits?`;
   if (lead.oldSite) {
     const why = (lead.oldSite.reasons || [])[0] || "looking a bit dated";
-    const problem = /mobile/i.test(why) ? "it doesn't display properly on phones, and most of your customers are looking you up on their phone"
-      : /load/i.test(why) ? "it wasn't loading when I tried it, so anyone searching for you right now hits a dead end"
-      : /padlock|secure/i.test(why) ? "browsers mark it as 'Not secure', which scares a lot of customers off before they even read it"
-      : /slow/i.test(why) ? "it's really slow on phones, and most people give up after a few seconds and call the next business"
-      : /free/i.test(why) ? "it's on a free builder address, which makes the business look smaller than it is"
-      : "it's looking a bit dated compared to other businesses nearby";
+    const problem = /mobile/i.test(why) ? "on my phone it's really hard to use, the text is tiny and I had to zoom in. Most of your customers will be looking on their phone too"
+      : /load/i.test(why) ? "it wasn't loading when I tried it, so anyone looking you up right now just hits a dead end"
+      : /padlock|secure/i.test(why) ? "my browser flagged it as 'Not secure', and that warning puts a lot of people off before they even read anything"
+      : /slow/i.test(why) ? "it took ages to load on my phone, and most people give up after a few seconds and ring the next place"
+      : /free/i.test(why) ? "it's on one of those free website addresses, which honestly makes the business look smaller than it is"
+      : "it's looking a bit dated next to the other places around you";
     return {
-      opener: `Hi, is this the owner of ${lead.name}? My name's ${first}, I'm with AR Methods, a local Perth web design business. Have you got 30 seconds?`,
-      hook: `I was looking at your website and noticed ${problem}.`,
-      offer: `We rebuild websites for local businesses: modern, fast, works perfectly on phones, and we keep everything that's working for you now. I can put together a free mockup of what yours could look like.`,
-      close: "Can I send that mockup to this number by text when it's ready? Who's the best person to put it under?",
+      opener,
+      hook: `I was having a look at your website before I called, and ${problem}. Did you know that?`,
+      offer: `That's what we do: we rebuild sites for local businesses so they're quick, look sharp on a phone, and keep all the stuff that's working for you now. It's a one-off price from $500 and we do all the writing, so there's basically nothing for you to do.`,
+      close,
     };
   }
   return {
-    opener: `Hi, is this the owner of ${lead.name}? My name's ${first}, I'm with AR Methods, a local Perth web design business. Have you got 30 seconds?`,
-    hook: `I noticed ${lead.name} doesn't have its own website. The reason I'm calling is ${HOOKS[g]}.`,
-    offer: `I'd like to build you a free mockup website — ${FEATURES[g]}. No cost, no obligation. If you like it, we talk. If not, no worries.`,
-    close: "Can I send the mockup to this number by text when it's ready? What's the best name to put it under?",
+    opener,
+    hook: `Quick question: if someone Googles ${lead.name}, what do they find? I couldn't see a website for you. The reason I ask is ${HOOKS[g](sub)}.`,
+    offer: `We build simple websites for local businesses: ${FEATURES[g]}. It's a one-off price from $500, no lock-in, and we write everything for you, so you don't have to do anything except check it.`,
+    close,
   };
 }
 
 export const OBJECTIONS = [
-  ["“We don't need a website.”", "Totally fair. Most of your customers still Google you before they come in though. The mockup's free — if it doesn't look like it'd bring in work, you've lost nothing."],
-  ["“It's too expensive.”", "That's why the mockup is free, so you can see it first. And one extra customer a month usually pays for the whole thing. What does an average customer spend with you?"],
-  ["“We use Facebook / Instagram.”", "Love that, keep it. The website just catches the people who Google you and don't use Facebook, and it links straight to your page. It works with your socials, not instead of them."],
-  ["“I'm busy right now.”", "No stress, I'll be quick: can I just text you the free mockup when it's ready? You can look whenever suits."],
-  ["“Send me some information.”", "Better than that, I'll send you an actual mockup of your website. What's the best number or email for it?"],
-  ["“We already have someone.”", "No worries. If they ever drop the ball, keep my number. Want me to send a free mockup anyway so you've got something to compare?"],
+  ["“We don't need a website.” / “We're busy enough.”", "Fair enough, sounds like business is good. Most owners I talk to aren't chasing more work, they just don't want to lose the good jobs to whoever shows up on Google first. Can I text you an example anyway, so you've got it for when things go quiet?"],
+  ["“How much?”", "Starts at $500, one-off, no monthly lock-in. That's the full site, written and set up for you. If you want us to look after it after that, it's from $10 a month, but that's optional."],
+  ["“That's too expensive.”", "Totally get it. Think of it this way: what's one normal job or customer worth to you? For most people the site pays for itself with one or two extra customers. And it's one payment, not a monthly thing."],
+  ["“We've got Facebook / Instagram.”", "Keep them, they're great for people who already follow you. The website is for the people who've never heard of you and Google something like a plumber near them. It links straight back to your socials."],
+  ["“I'm busy right now.”", "No worries at all. Is tomorrow morning or tomorrow arvo better? I'll keep it to two minutes."],
+  ["“Just send me some info.”", "Yep, easy. Is text or email better? I'll send two or three sites we've done and the prices, nothing long."],
+  ["“We already have someone.” / “My nephew does it.”", "All good, that's handy. If it ever needs a refresh or they get too busy, we're around. Mind if I text you my details so you've got them?"],
+  ["“Where did you get my number?”", "Fair question. It's on your Google listing. We're a local Perth team, I'm just calling businesses around here that don't have a site yet. Happy to text you our details so you can check us out."],
+  ["“I'll think about it.”", "Course, no pressure. Do you want me to text you the examples so you can have a look first, or give you a ring back later in the week?"],
 ];
 
 // =====================================================================
@@ -86,9 +94,9 @@ export function signature(me, brand = {}) {
 export function textsFor(lead, me, brand) {
   const sig = signature(me, brand);
   return [
-    { id: "mockup", label: "Mockup ready", text: `Hi! Your free website mockup for ${lead.name} is ready. Can I send you the link to have a look? No cost, no obligation.\n${sig}` },
-    { id: "missed", label: "Missed call", text: `Hi, I just tried calling ${lead.name}. I build websites for local Perth businesses and I'd love to make you a free mockup. Is now a bad time? Happy to call back whenever suits.\n${sig}` },
-    { id: "followup", label: "Follow up", text: `Hi, just following up on the website for ${lead.name}. Did you get a chance to look at the mockup? Keen to hear what you think.\n${sig}` },
+    { id: "examples", label: "Examples after a call", text: `Hey, it's ${(me?.name || "").split(" ")[0] || "us"} from AR Methods, thanks for the chat just now. Here's some of our work: armethods.com. Sites start at $500 one-off and we write everything for you. Have a look when you get a sec and let me know what you think.\n${sig}` },
+    { id: "missed", label: "Missed call", text: `Hey, just tried giving ${lead.name} a call. We're a small Perth web design team and I noticed you don't have a website yet. No stress, when's a good time for a quick 2 minute chat?\n${sig}` },
+    { id: "followup", label: "Follow up", text: `Hey, just checking in about the website for ${lead.name}. Did you get a chance to have a look at the examples? Happy to answer anything, even if it's a no.\n${sig}` },
     { id: "thanks", label: "Thanks (after a sale)", text: `Thanks for choosing ${BRAND.name} for ${lead.name}'s website! We'll be in touch with the next steps soon. If you know anyone else who needs a site, send them our way.\n${sig}` },
   ];
 }
