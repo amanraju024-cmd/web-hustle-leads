@@ -41,7 +41,7 @@ export function scriptFor(lead, me) {
   const g = groupOf(lead.category);
   const first = (me?.name || "").split(" ")[0] || "I";
   const sub = lead.suburb || "your area";
-  const opener = `Hey, is that the owner of ${lead.name}? Sorry, I'll be quick. It's ${first} from AR Methods, we're a small web design team here in Perth. Have you got 30 seconds? You can tell me to rack off after.`;
+  const opener = `Hi, is this ${lead.name}? … Hi, it's ${first} from AR Methods. We build websites for local businesses here in Perth.`;
   const close = `Easiest thing: I'll text you a couple of sites we've done for other ${PEOPLE[g]} and the price, and you have a look when you've got a minute. Or if it's easier, I can give you a ring back tomorrow. Which suits?`;
   if (lead.oldSite) {
     const why = (lead.oldSite.reasons || [])[0] || "looking a bit dated";
@@ -53,14 +53,14 @@ export function scriptFor(lead, me) {
       : "it's looking a bit dated next to the other places around you";
     return {
       opener,
-      hook: `I was having a look at your website before I called, and ${problem}. Did you know that?`,
+      hook: `Do you look after your website yourselves? … I had a look at it before I called and ${problem}.`,
       offer: `That's what we do: we rebuild sites for local businesses so they're quick, look sharp on a phone, and keep all the stuff that's working for you now. It's a one-off price from $500 and we do all the writing, so there's basically nothing for you to do.`,
       close,
     };
   }
   return {
     opener,
-    hook: `Quick question: if someone Googles ${lead.name}, what do they find? I couldn't see a website for you. The reason I ask is ${HOOKS[g](sub)}.`,
+    hook: `Do you have a website at the moment? … Yeah, I couldn't find one when I searched. The reason I'm calling is ${HOOKS[g](sub)}.`,
     offer: `We build simple websites for local businesses: ${FEATURES[g]}. It's a one-off price from $500, no lock-in, and we write everything for you, so you don't have to do anything except check it.`,
     close,
   };

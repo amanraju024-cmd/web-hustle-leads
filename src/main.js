@@ -382,7 +382,7 @@ const START_STEPS = () => [
       <li>While it rings, open <b>📜 Call script &amp; objections</b> on the same card. It tells you what to say, and what to say back when they say no.</li>
       <li>During the call, type anything useful into <b>Notes</b> (the owner's name, when they're free, what they said).</li></ol>
     <div class="start-script"><b>How a call starts</b>
-      <p>"Hey, is that the owner? Sorry, I'll be quick. It's ${esc(state.me.name.split(" ")[0])} from ${esc(BRAND.name)}, we're a small web design team here in Perth. Got 30 seconds? … Quick question: if someone Googles your business, what do they find?"</p>
+      <p>"Hi, is this Bob's Plumbing? … Hi, it's ${esc(state.me.name.split(" ")[0])} from ${esc(BRAND.name)}. We build websites for local businesses here in Perth. Do you have a website at the moment?"</p>
       <p class="muted small">Sound like a person, not a script. Ask a question, then listen. You're not begging, you're helping them get more customers. Never promise anything for free.</p></div>` },
   { id: "log", icon: "✅", title: "Log the status straight after the call", body: `
     <p>As soon as you hang up, scroll down the same card to <b>Log this call as:</b> and tap what happened. <b>Do this for every call</b>, even when nobody answers. It's how your calls, points and pay get counted.</p>
