@@ -364,16 +364,41 @@ service cloud.firestore {
       allow list, write: if false;
     }
     // Team chat: everyone active reads and posts as themselves (name/role must match their profile); admin can delete
+    // Chat attachments: the message holds a small preview, the full file lives in chatFiles (sent in the same write)
+    function chatFileOk(f) {
+      return f is map && f.keys().hasOnly(['id', 'name', 'type', 'size', 'kind', 'thumb', 'w', 'h'])
+        && f.id is string && f.id.size() <= 40
+        && shortString(f.name, 120) && shortString(f.type, 100)
+        && f.size is int && f.size <= 1000000
+        && f.kind in ['image', 'file']
+        && (!('thumb' in f) || shortString(f.thumb, 60000))
+        && existsAfter(/databases/$(database)/documents/chatFiles/$(f.id))
+        && getAfter(/databases/$(database)/documents/chatFiles/$(f.id)).data.uid == request.auth.uid;
+    }
+    match /chatFiles/{id} {
+      allow read: if isActive();
+      allow create: if isActive()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'type', 'size', 'data', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && shortString(request.resource.data.name, 120) && shortString(request.resource.data.type, 100)
+        && request.resource.data.size is int && request.resource.data.size <= 1000000
+        && request.resource.data.data is string && request.resource.data.data.size() <= 980000
+        && request.resource.data.data.matches('^data:[^,]{0,100},.*')
+        && request.resource.data.at == request.time;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
     match /messages/{id} {
       allow read: if isActive();
       allow create: if isActive()
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'role', 'text', 'at'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'role', 'text', 'at', 'file'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.name == profile().name
         && request.resource.data.role == profile().role
         && request.resource.data.text is string
-        && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 1000
+        && (request.resource.data.text.size() >= 1 || 'file' in request.resource.data)
+        && (!('file' in request.resource.data) || chatFileOk(request.resource.data.file))
         && request.resource.data.at == request.time;
       allow update: if false;
       allow delete: if isAdmin();

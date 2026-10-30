@@ -438,6 +438,23 @@
   .chat-quick { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px 0; scrollbar-width: none; border-top: 1px solid var(--border); }
   .chat-quick .chip { white-space: nowrap; font-size: 12px; }
   .chat-form { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px 12px; }
+  .chat-clip { display: inline-grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; cursor: pointer; font-size: 20px; background: rgba(255,255,255,.05); border: 1px solid var(--border); }
+  .chat-clip:hover { background: rgba(255,255,255,.09); }
+  .chat-attach { display: flex; align-items: center; gap: 10px; margin: 8px 12px 0; padding: 8px 10px; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid var(--border); }
+  .chat-attach[hidden] { display: none; }
+  .chat-attach img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; }
+  .chat-attach div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .chat-attach b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-attach small { color: var(--muted); font-size: 12px; }
+  .file-ico { font-size: 26px; line-height: 1; }
+  .att-img { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 14px; overflow: hidden; max-width: 260px; margin-bottom: 4px; }
+  .att-img img { display: block; width: 100%; height: auto; max-height: 320px; object-fit: cover; background: rgba(255,255,255,.05); }
+  .msg.mine .att-img, .msg.mine .att-file { align-self: flex-end; }
+  .att-file { display: flex; align-items: center; gap: 10px; text-align: left; max-width: 280px; padding: 10px 12px; margin-bottom: 4px; border-radius: 14px; cursor: pointer; color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--border); font: inherit; }
+  .att-file span:last-child { display: flex; flex-direction: column; min-width: 0; }
+  .att-file b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .att-file small { color: var(--muted); font-size: 12px; }
+  .att-full { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto 8px; border-radius: 10px; }
   .chat-form textarea { flex: 1; resize: none; min-height: 44px; max-height: 140px; border-radius: 22px; padding: 11px 16px; }
   .chat-form button { border-radius: 22px; min-height: 44px; }
   .celebrate.chat { text-decoration: none; color: inherit; }

@@ -249,7 +249,7 @@ function chatPopup(m) {
   const el = document.createElement("a");
   el.href = "#chat";
   el.className = "celebrate chat";
-  el.innerHTML = `<span class="ce-icon">💬</span><span><b>${esc(m.name)}${m.role === "admin" ? " (CEO)" : ""}:</b> ${esc(m.text.slice(0, 90))}${m.text.length > 90 ? "…" : ""}</span>`;
+  el.innerHTML = `<span class="ce-icon">💬</span><span><b>${esc(m.name)}${m.role === "admin" ? " (CEO)" : ""}:</b> ${m.text ? `${esc(m.text.slice(0, 90))}${m.text.length > 90 ? "…" : ""}` : m.file ? (m.file.kind === "image" ? "📷 Photo" : `📎 ${esc(m.file.name)}`) : ""}</span>`;
   document.body.appendChild(el);
   setTimeout(() => el.classList.add("show"), 20);
   setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 5000);
@@ -264,18 +264,41 @@ function screenChat() {
     <section class="chat card">
       <div class="chat-list" id="chatList" aria-live="polite"><div class="loading"><span class="spinner"></span></div></div>
       <div class="chat-quick">${QUICK_MSGS.map((q, i) => `<button class="chip" data-q="${i}">${esc(q)}</button>`).join("")}</div>
+      <div class="chat-attach" id="chatAttach" hidden></div>
       <form class="chat-form" id="chatForm">
+        <label class="chat-clip" title="Add a photo or file" aria-label="Add a photo or file">📎<input type="file" id="chatFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip" hidden></label>
         <textarea id="chatText" rows="1" maxlength="1000" placeholder="Message the team…" aria-label="Message"></textarea>
-        <button class="primary" aria-label="Send">Send</button>
+        <button class="primary" aria-label="Send" id="chatSend">Send</button>
       </form>
     </section>`;
   const input = $("#chatText");
+  let pending = null; // attachment ready to send
+  const drawPending = () => {
+    const box = $("#chatAttach");
+    box.hidden = !pending;
+    box.innerHTML = pending ? `${pending.kind === "image" ? `<img src="${esc(pending.thumb)}" alt="">` : `<span class="file-ico">${fileIcon(pending.name)}</span>`}
+      <div><b>${esc(pending.name)}</b><small>${esc(fmtSize(pending.size))}</small></div><button type="button" class="linkbtn" id="chatAttachX" aria-label="Remove attachment">✕</button>` : "";
+    $("#chatAttachX")?.addEventListener("click", () => { pending = null; drawPending(); });
+  };
+  const pick = async (file) => {
+    if (!file) return;
+    try { pending = await prepareAttachment(file); drawPending(); input.focus(); }
+    catch (e) { toast(e.message || "Couldn't add that file", "bad"); }
+  };
+  $("#chatFile").addEventListener("change", (e) => { pick(e.target.files[0]); e.target.value = ""; });
+  input.addEventListener("paste", (e) => {
+    const f = [...(e.clipboardData?.files || [])][0];
+    if (f) { e.preventDefault(); pick(f); }
+  });
   const send = async (text) => {
     text = text.trim();
-    if (!text) return;
-    input.value = ""; input.style.height = "";
-    try { await D.sendMessage(state.me, text); }
-    catch (e) { input.value = text; toast(D.authMessage(e), "bad"); }
+    if (!text && !pending) return;
+    const file = pending, btn = $("#chatSend");
+    input.value = ""; input.style.height = ""; pending = null; drawPending();
+    if (file) { btn.disabled = true; btn.textContent = "Sending…"; }
+    try { await D.sendMessage(state.me, text, file); }
+    catch (e) { input.value = text; pending = file; drawPending(); toast(D.authMessage(e), "bad"); }
+    finally { btn.disabled = false; btn.textContent = "Send"; }
   };
   $("#chatForm").addEventListener("submit", (e) => { e.preventDefault(); send(input.value); input.focus(); });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); } });
@@ -300,16 +323,71 @@ function drawChat() {
     const mine = m.uid === state.me.id;
     return `${sep}<div class="msg ${mine ? "mine" : ""} ${m.role === "admin" ? "ceo" : ""}">
       ${mine ? "" : `<span class="msg-name">${esc(m.name)}${m.role === "admin" ? ' <em class="role">CEO</em>' : ""}</span>`}
-      <div class="bubble">${esc(m.text).replace(/\n/g, "<br>")}</div>
-      <span class="msg-meta">${esc(fmtTime(d))}${isAdmin() ? ` · <button class="linkbtn" data-del="${esc(m.id)}">Delete</button>` : ""}</span>
+      ${m.file ? attachmentHtml(m.file) : ""}
+      ${m.text ? `<div class="bubble">${esc(m.text).replace(/\n/g, "<br>")}</div>` : ""}
+      <span class="msg-meta">${esc(fmtTime(d))}${isAdmin() ? ` · <button class="linkbtn" data-del="${esc(m.id)}" data-delfile="${esc(m.file?.id || "")}">Delete</button>` : ""}</span>
     </div>`;
   }).join("");
   if (nearBottom || !list.dataset.ready) list.scrollTop = list.scrollHeight;
   list.dataset.ready = "1";
   list.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Delete this message for everyone?")) return;
-    try { await D.deleteMessage(b.dataset.del); } catch (e) { toast(D.authMessage(e), "bad"); }
+    try { await D.deleteMessage(b.dataset.del, b.dataset.delfile || null); } catch (e) { toast(D.authMessage(e), "bad"); }
   }));
+  list.querySelectorAll("[data-open-file]").forEach((el) => el.addEventListener("click", () => openAttachment(el.dataset.openFile)));
+  list.querySelectorAll(".att-img img").forEach((img) => img.addEventListener("load", () => { if (nearBottom || list.dataset.first !== "1") list.scrollTop = list.scrollHeight; }, { once: true }));
+  list.dataset.first = "1";
+}
+
+// ---------- chat attachments (kept in Firestore: photos are shrunk, other files up to ~700 KB) ----------
+const MAX_FILE = 700 * 1024;
+const fmtSize = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
+const fileIcon = (name) => { const ext = String(name).split(".").pop().toLowerCase();
+  return /pdf/.test(ext) ? "📕" : /docx?/.test(ext) ? "📘" : /xlsx?|csv/.test(ext) ? "📗" : /pptx?/.test(ext) ? "📙" : /zip/.test(ext) ? "🗜️" : "📄"; };
+const readAsDataURL = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error("Couldn't read that file")); r.readAsDataURL(blob); });
+async function shrinkImage(file, maxSide, quality) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("That image couldn't be opened")); i.src = url; });
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+    return { data: c.toDataURL("image/jpeg", quality), w, h };
+  } finally { URL.revokeObjectURL(url); }
+}
+async function prepareAttachment(file) {
+  const name = (file.name || "photo.jpg").slice(0, 120);
+  if (/^image\/(png|jpe?g|webp|gif|heic|heif|bmp)$/i.test(file.type) || (/^image\//.test(file.type) && !/svg/.test(file.type))) {
+    let full = await shrinkImage(file, 1600, 0.82);
+    for (const [side, q] of [[1280, 0.75], [1024, 0.7], [800, 0.65]]) { if (full.data.length <= 950000) break; full = await shrinkImage(file, side, q); }
+    if (full.data.length > 950000) throw new Error("That photo is too big to send");
+    const thumb = await shrinkImage(file, 360, 0.6);
+    return { kind: "image", name: name.replace(/\.(heic|heif|png|webp|bmp|gif)$/i, ".jpg"), type: "image/jpeg", size: Math.round(full.data.length * 0.75), data: full.data, thumb: thumb.data, w: full.w, h: full.h };
+  }
+  if (file.size > MAX_FILE) throw new Error(`That file is ${fmtSize(file.size)}. The limit is 700 KB, so send a link to it instead (Google Drive, Dropbox…).`);
+  return { kind: "file", name, type: (file.type || "application/octet-stream").slice(0, 100), size: file.size, data: await readAsDataURL(file) };
+}
+function attachmentHtml(f) {
+  if (f.kind === "image" && f.thumb) {
+    const ratio = f.w && f.h ? ` style="aspect-ratio:${f.w}/${f.h}"` : "";
+    return `<button type="button" class="att-img" data-open-file="${esc(f.id)}" aria-label="Open photo ${esc(f.name)}"><img src="${esc(f.thumb)}" alt="${esc(f.name)}"${ratio}></button>`;
+  }
+  return `<button type="button" class="att-file" data-open-file="${esc(f.id)}"><span class="file-ico">${fileIcon(f.name)}</span><span><b>${esc(f.name)}</b><small>${esc(fmtSize(f.size || 0))} · tap to open</small></span></button>`;
+}
+async function openAttachment(id) {
+  try {
+    const f = await D.getChatFile(id);
+    if (!f) return toast("That attachment was deleted", "bad");
+    if (/^image\//.test(f.type)) {
+      showModal(`<img class="att-full" src="${esc(f.data)}" alt="${esc(f.name)}"><p class="muted small" style="text-align:center">${esc(f.name)} · <a href="${esc(f.data)}" download="${esc(f.name)}">Save</a></p>`);
+      return;
+    }
+    const blob = await (await fetch(f.data)).blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch (e) { toast(D.authMessage(e), "bad"); }
 }
 
 const modalQueue = [];

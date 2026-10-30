@@ -521,3 +521,29 @@ test("unsubscribe link works only with the right token", async () => {
   await assertSucceeds(setDoc(doc(anon, "unsubs/sam1"), { t: "a".repeat(36), at: serverTimestamp() }));
   await assertFails(getDoc(doc(anon, "unsubs/sam1")));
 });
+
+test("chat attachments: sent with the message, owned by the sender, size-limited", async () => {
+  const db = as("w1");
+  const base = { uid: "w1", name: "Sam", role: "worker", text: "", at: serverTimestamp() };
+  const meta = (id, extra = {}) => ({ id, name: "quote.pdf", type: "application/pdf", size: 1200, kind: "file", ...extra });
+  const file = (extra = {}) => ({ uid: "w1", name: "quote.pdf", type: "application/pdf", size: 1200, data: "data:application/pdf;base64,JVBERi0=", at: serverTimestamp(), ...extra });
+  // file + message together
+  const ok = writeBatch(db);
+  ok.set(doc(db, "chatFiles/f1"), file());
+  ok.set(doc(db, "messages/m1"), { ...base, file: meta("f1") });
+  await assertSucceeds(ok.commit());
+  await assertSucceeds(getDoc(doc(as("w2"), "chatFiles/f1")));                       // teammates can open it
+  // a message pointing at a file that doesn't exist, or someone else's file
+  await assertFails(setDoc(doc(db, "messages/m2"), { ...base, file: meta("nope") }));
+  await assertFails(setDoc(doc(as("w2"), "messages/m3"), { uid: "w2", name: "Jo", role: "worker", text: "", at: serverTimestamp(), file: meta("f1") }));
+  // empty message with no file, oversized data, not a data URL, someone else's uid
+  await assertFails(setDoc(doc(db, "messages/m4"), base));
+  await assertFails(setDoc(doc(db, "chatFiles/f2"), file({ data: "data:x;base64," + "A".repeat(990000) })));
+  await assertFails(setDoc(doc(db, "chatFiles/f3"), file({ data: "javascript:alert(1)" })));
+  await assertFails(setDoc(doc(db, "chatFiles/f4"), file({ uid: "w2" })));
+  await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "chatFiles/f5"), file()));
+  // only admin deletes; nobody edits
+  await assertFails(deleteDoc(doc(db, "chatFiles/f1")));
+  await assertFails(updateDoc(doc(db, "chatFiles/f1"), { name: "x" }));
+  await assertSucceeds(deleteDoc(doc(as("owner"), "chatFiles/f1")));
+});

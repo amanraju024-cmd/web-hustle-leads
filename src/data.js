@@ -432,9 +432,26 @@ export async function getBriefSettings() {
 export const saveBriefSettings = (s) => setDoc(doc(db, "settings", "brief"), s);
 
 // ---------- team chat ----------
-export const sendMessage = (me, text) =>
-  addDoc(collection(db, "messages"), { uid: me.id, name: me.name, role: me.role, text: text.slice(0, 1000), at: serverTimestamp() });
-export const deleteMessage = (id) => deleteDoc(doc(db, "messages", id));
+/** Sends a chat message. `file` (optional): { name, type, size, kind, data (data: URL), thumb?, w?, h? }. */
+export async function sendMessage(me, text, file) {
+  const msg = { uid: me.id, name: me.name, role: me.role, text: (text || "").slice(0, 1000), at: serverTimestamp() };
+  if (!file) return addDoc(collection(db, "messages"), msg);
+  const fileRef = doc(collection(db, "chatFiles"));
+  const b = writeBatch(db);
+  b.set(fileRef, { uid: me.id, name: file.name.slice(0, 120), type: file.type.slice(0, 100), size: file.size, data: file.data, at: serverTimestamp() });
+  const meta = { id: fileRef.id, name: file.name.slice(0, 120), type: file.type.slice(0, 100), size: file.size, kind: file.kind };
+  if (file.thumb) Object.assign(meta, { thumb: file.thumb, w: file.w || 0, h: file.h || 0 });
+  b.set(doc(collection(db, "messages")), { ...msg, file: meta });
+  return b.commit();
+}
+export async function getChatFile(id) {
+  const snap = await getDoc(doc(db, "chatFiles", id));
+  return snap.exists() ? snap.data() : null;
+}
+export async function deleteMessage(id, fileId) {
+  if (fileId) await deleteDoc(doc(db, "chatFiles", fileId)).catch(() => {});
+  return deleteDoc(doc(db, "messages", id));
+}
 export function watchMessages(cb, onErr) {
   return onSnapshot(query(collection(db, "messages"), orderBy("at", "desc"), limit(200)),
     { includeMetadataChanges: false },
