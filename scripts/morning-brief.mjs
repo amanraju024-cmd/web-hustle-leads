@@ -13,6 +13,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { perthDay, addDays, weekStart, prettyDay } from "../src/util.js";
 import { commissionFor, careStats, REFERRAL_REWARD } from "../src/extras.js";
 import { buildWorkerEmails } from "./team-emails.mjs";
+import { waConfigured, postToGroup, morningScoreboard } from "./wa-group.mjs";
 
 const DRY = !!process.env.DRY_RUN;
 const PROJECT = process.env.FIREBASE_PROJECT || "armethods";
@@ -198,6 +199,12 @@ async function main() {
       }
       results.push(`team emails: ${sent} sent` + (bad.length ? `, failed ${bad.join("; ")}` : ""));
     }
+  }
+  // 👥 Team WhatsApp group scoreboard
+  if (waConfigured()) {
+    if (sentBefore("group")) skip("group");
+    else try { await postToGroup(await morningScoreboard(db)); results.push(DRY ? "group: (dry run)" : "group: ok"); }
+    catch (e) { results.push("group: failed " + e.message); }
   }
   // 📋 Save for the Admin page
   const doc = { ...brief, results, createdAt: FieldValue.serverTimestamp() };

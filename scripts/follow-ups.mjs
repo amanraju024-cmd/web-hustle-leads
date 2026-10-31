@@ -9,6 +9,7 @@ import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { randomBytes } from "node:crypto";
 import { DEFAULT_PACKAGES } from "../src/extras.js";
+import { hourlyGroupUpdates } from "./wa-group.mjs";
 
 const DRY = !!process.env.DRY_RUN;
 const PROJECT = process.env.FIREBASE_PROJECT || "armethods";
@@ -148,6 +149,8 @@ async function main() {
     if (imap) await imap.logout().catch(() => {});
     if (!leads.length) log.push("follow-ups: none running");
   }
+  // 👥 team WhatsApp group: new deals, ladder unlocks, enquiries (runs after enquiries so the email goes first)
+  try { log.push(...await hourlyGroupUpdates(db, now)); } catch (e) { log.push(`whatsapp group: failed ${e.message}`); }
   console.log(log.join("\n") || "nothing to do");
   if (log.some((r) => r.includes(" failed "))) process.exitCode = 1;
 }

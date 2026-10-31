@@ -316,6 +316,8 @@ export const REFERRAL_REWARD = 50;
 // Team goal ladder: shared monthly targets; each level unlocks a prize for everyone
 // once the level before it is hit (so the team pushes together, not against each other)
 // =====================================================================
+/** "1 more websites sold" -> "1 more website sold" */
+export const ladderUnit = (label, n) => (n === 1 ? label.replace(/^websites/, "website").replace(/leads$/, "lead").replace(/^calls$/, "call") : label);
 export const LADDER_METRICS = {
   calls: { label: "calls", fmt: (n) => `${n}` },
   interested: { label: "interested leads", fmt: (n) => `${n}` },

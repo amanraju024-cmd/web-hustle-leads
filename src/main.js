@@ -6,7 +6,7 @@ import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE, PAGE
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
   commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
-  LADDER_METRICS, DEFAULT_LADDER, teamTotals, ladderProgress,
+  LADDER_METRICS, DEFAULT_LADDER, teamTotals, ladderProgress, ladderUnit,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -1535,7 +1535,7 @@ async function drawLadder(rid) {
     const daysLeft = new Date(Date.UTC(y, mo, 0)).getUTCDate() - Number(today.slice(8, 10)) + 1;
     const M = (l) => LADDER_METRICS[l.metric];
     const gapText = (l) => { const gap = Math.max(0, l.target - l.value);
-      return l.metric === "revenue" ? `${M(l).fmt(gap)} more in sales to unlock` : `${gap} more ${M(l).label} to unlock`; };
+      return l.metric === "revenue" ? `${M(l).fmt(gap)} more in sales to unlock` : `${gap} more ${ladderUnit(M(l).label, gap)} to unlock`; };
     const paceText = (l) => {
       const gap = Math.max(0, l.target - l.value);
       if (!gap) return "";
