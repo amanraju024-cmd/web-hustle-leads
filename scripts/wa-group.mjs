@@ -112,7 +112,7 @@ export async function morningScoreboard(db, now = new Date()) {
     if (hof.length) lines.push("", ...hof);
     const [users, team] = await Promise.all([db.collection("users").get(), db.doc("settings/team").get()]);
     const workers = users.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => u.active && u.role !== "admin");
-    if (workers.length) lines.push("", ...hallOfShame(weekRows, workers, (team.exists && team.data().dailyGoal) || 30));
+    if (workers.length) lines.push("", ...hallOfShame(weekRows, workers, (team.exists && team.data().dailyGoal) || 30, new Date(`${lastWeek}T00:00:00+08:00`).getTime()));
   }
   const ladder = await ladderLine(db, now);
   if (ladder) lines.push("", ladder);
@@ -204,8 +204,10 @@ export async function dayWrap(db, now = new Date()) {
 }
 
 /** Monday: who did under half the weekly call target last week, with a way back. */
-function hallOfShame(weekRows, workers, goal) {
+function hallOfShame(weekRows, workers, goal, weekStartMs = 0) {
   const target = goal * 5, half = Math.ceil(target / 2);
+  // anyone who joined during (or after the start of) that week gets a pass for their first, part week
+  workers = workers.filter((w) => !(w.createdAt?.toMillis?.() > weekStartMs));
   const calls = new Map();
   for (const r of weekRows) calls.set(r.uid, (calls.get(r.uid) || 0) + (r.calls || 0));
   const low = workers.map((w) => ({ name: w.name, calls: calls.get(w.id) || 0 })).filter((w) => w.calls < half).sort((a, b) => a.calls - b.calls);
