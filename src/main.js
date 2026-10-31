@@ -1530,15 +1530,35 @@ async function drawLadder(rid) {
     const prog = ladderProgress(levels, totals);
     const unlocked = prog.filter((l) => l.unlocked).length;
     const monthName = new Date(`${month}-15T12:00:00+08:00`).toLocaleString("en-AU", { month: "long", timeZone: "Australia/Perth" });
+    const next = prog.find((l) => l.current);
+    const [y, mo] = month.split("-").map(Number);
+    const daysLeft = new Date(Date.UTC(y, mo, 0)).getUTCDate() - Number(today.slice(8, 10)) + 1;
+    const M = (l) => LADDER_METRICS[l.metric];
+    const gapText = (l) => { const gap = Math.max(0, l.target - l.value);
+      return l.metric === "revenue" ? `${M(l).fmt(gap)} more in sales to unlock` : `${gap} more ${M(l).label} to unlock`; };
+    const paceText = (l) => {
+      const gap = Math.max(0, l.target - l.value);
+      if (!gap) return "";
+      const perDay = gap / Math.max(1, daysLeft);
+      if (l.metric === "calls") return `about ${Math.ceil(perDay)} team calls a day gets it`;
+      if (daysLeft <= 7) return `needed in the next ${daysLeft} day${daysLeft === 1 ? "" : "s"}, let's go`;
+      if (l.metric === "revenue") return `about ${M(l).fmt(Math.ceil(perDay * 7))} a week gets it`;
+      const perWeek = gap / Math.max(1, daysLeft / 7);
+      return perWeek <= 1 ? `about 1 a week gets it` : `about ${Math.ceil(perWeek)} a week gets it`;
+    };
     $("#ladderBox").innerHTML = `<section class="card ladder">
-      <div class="ladder-head"><h2>🪜 Team goal ladder <span class="muted small">${esc(monthName)}</span></h2>
-        <span class="ladder-count">${unlocked} / ${prog.length} unlocked</span></div>
-      <p class="muted small">Hit a level together and everyone gets the prize. Each level opens once the one before it is done.</p>
-      <ol class="rungs">${prog.slice().reverse().map((l) => `<li class="rung ${l.unlocked ? "done" : l.current ? "now" : "locked"}">
-        <span class="rung-n">${l.unlocked ? "✓" : l.locked ? "🔒" : l.n}</span>
-        <div class="rung-body"><div class="rung-top"><b>${esc(l.prize)}</b><span>${LADDER_METRICS[l.metric].fmt(Math.min(l.value, l.target))} / ${LADDER_METRICS[l.metric].fmt(l.target)} ${esc(LADDER_METRICS[l.metric].label)}</span></div>
-          <div class="bar"><span style="width:${l.locked ? 0 : l.pct}%"></span></div></div></li>`).join("")}</ol>
-      <button class="linkbtn" id="ladderIdea">💡 Suggest a prize</button>
+      <div class="ladder-head"><h2>🪜 Team goal · ${esc(monthName)}</h2><span class="muted small">${daysLeft} day${daysLeft === 1 ? "" : "s"} left</span></div>
+      ${next ? `<div class="ladder-next">
+          <span class="ladder-kicker">Next prize · level ${next.n} of ${prog.length}</span>
+          <b class="ladder-prize">🎁 ${esc(next.prize)}</b>
+          <div class="bar"><span style="width:${next.pct}%"></span></div>
+          <div class="ladder-nums"><b>${esc(gapText(next))}</b><span>${M(next).fmt(next.value)} / ${M(next).fmt(next.target)}</span></div>
+          ${paceText(next) ? `<span class="muted small">${esc(paceText(next))}</span>` : ""}
+        </div>`
+      : `<div class="ladder-next all"><b class="ladder-prize">🏆 Every level unlocked!</b><span class="muted small">Huge month. Enjoy the prizes.</span></div>`}
+      <ol class="steps-track">${prog.map((l) => `<li class="${l.unlocked ? "done" : l.current ? "now" : "locked"}">
+        <span class="dot">${l.unlocked ? "✓" : l.n}</span><small>${esc(l.prize)}</small></li>`).join("")}</ol>
+      <div class="ladder-foot"><span class="muted small">Hit it as a team, everyone gets the prize.</span><button class="linkbtn" id="ladderIdea">💡 Suggest a prize</button></div>
     </section>`;
     $("#ladderIdea").addEventListener("click", () => { sessionStorage.setItem("arm_chat_draft", "Prize idea for the team ladder: "); location.hash = "#chat"; });
     // celebrate a level the first time this person sees it unlocked

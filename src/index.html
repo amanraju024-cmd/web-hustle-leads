@@ -604,21 +604,30 @@
   .modal { width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto; padding: 24px; border-radius: 20px; background: #160f10; border: 1px solid var(--border-strong); box-shadow: 0 40px 100px -20px rgba(0,0,0,.9); }
   .wide-btn { width: 100%; margin-top: 16px; }
   /* Team goal ladder */
-  .ladder-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .ladder-head h2 { margin: 0; }
-  .ladder-count { font-size: 12px; font-weight: 700; color: var(--accent-text); background: var(--gold); padding: 3px 10px; border-radius: 999px; }
-  .rungs { list-style: none; padding: 0; margin: 12px 0 6px; display: flex; flex-direction: column; gap: 8px; }
-  .rung { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid var(--border); }
-  .rung.now { border-color: rgba(226,185,104,.55); background: rgba(226,185,104,.07); }
-  .rung.done { border-color: rgba(80,180,120,.35); background: rgba(80,180,120,.07); }
-  .rung.locked { opacity: .55; }
-  .rung-n { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 50%; font-size: 13px; font-weight: 700; background: rgba(255,255,255,.07); }
-  .rung.now .rung-n { background: var(--gold); color: var(--accent-text); }
-  .rung.done .rung-n { background: rgba(80,180,120,.25); color: #8ee0ad; }
-  .rung-body { flex: 1; min-width: 0; }
-  .rung-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 14px; margin-bottom: 6px; }
-  .rung-top span { color: var(--muted); font-size: 13px; }
-  .rung .bar { height: 6px; margin: 0; }
+  .ladder { padding-bottom: 14px; }
+  .ladder-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .ladder-head h2 { margin: 0; font-size: 17px; }
+  .ladder-next { margin: 14px 0 4px; padding: 16px; border-radius: 16px; background: linear-gradient(135deg, rgba(226,185,104,.14), rgba(156,28,48,.12)); border: 1px solid rgba(226,185,104,.35); display: flex; flex-direction: column; gap: 6px; }
+  .ladder-next.all { background: rgba(80,180,120,.12); border-color: rgba(80,180,120,.4); }
+  .ladder-kicker { font-size: 12px; color: var(--muted); }
+  .ladder-prize { font-size: 22px; letter-spacing: -.01em; line-height: 1.2; }
+  .ladder-next .bar { height: 12px; margin: 6px 0 2px; }
+  .ladder-nums { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+  .ladder-nums span { color: var(--muted); }
+  .steps-track { list-style: none; display: flex; padding: 0; margin: 16px 0 6px; }
+  .steps-track li { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; text-align: center; min-width: 0; }
+  .steps-track li::before { content: ""; position: absolute; top: 14px; right: 50%; width: 100%; height: 3px; background: rgba(255,255,255,.1); z-index: 0; }
+  .steps-track li:first-child::before { display: none; }
+  .steps-track li.done::before, .steps-track li.now::before { background: var(--gold); }
+  .steps-track .dot { position: relative; z-index: 1; display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font-size: 13px; font-weight: 700; background: #241a1c; border: 2px solid rgba(255,255,255,.15); color: var(--muted); }
+  .steps-track li.done .dot { background: var(--gold); border-color: var(--gold); color: var(--accent-text); }
+  .steps-track li.now .dot { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 4px rgba(226,185,104,.15); }
+  .steps-track small { font-size: 11.5px; line-height: 1.25; color: var(--muted); padding: 0 4px; overflow-wrap: anywhere; }
+  .steps-track li.now small { color: var(--text); font-weight: 600; }
+  .steps-track li.locked { opacity: .6; }
+  .ladder-won { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+  .won-chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: rgba(80,180,120,.15); color: #8ee0ad; }
+  .ladder-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
   .ladder-setup { display: flex; gap: 12px; align-items: center; text-decoration: none; color: var(--text); font-size: 22px; }
   .ladder-setup span { display: flex; flex-direction: column; font-size: 15px; }
   .ladder-setup small { color: var(--muted); font-size: 13px; }
