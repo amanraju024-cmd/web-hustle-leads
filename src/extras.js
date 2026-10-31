@@ -311,3 +311,37 @@ export const DEFAULT_PACKAGES = [
 // =====================================================================
 export const REFERRAL_REWARD = 50;
 
+
+// =====================================================================
+// Team goal ladder: shared monthly targets; each level unlocks a prize for everyone
+// once the level before it is hit (so the team pushes together, not against each other)
+// =====================================================================
+export const LADDER_METRICS = {
+  calls: { label: "calls", fmt: (n) => `${n}` },
+  interested: { label: "interested leads", fmt: (n) => `${n}` },
+  won: { label: "websites sold", fmt: (n) => `${n}` },
+  revenue: { label: "in sales", fmt: (n) => "$" + Math.round(n) },
+};
+export const DEFAULT_LADDER = [
+  { metric: "calls", target: 600, prize: "Team lunch, on AR Methods" },
+  { metric: "interested", target: 25, prize: "$20 bonus each" },
+  { metric: "won", target: 4, prize: "$50 bonus each" },
+  { metric: "revenue", target: 5000, prize: "Team night out" },
+];
+/** Totals for the team this month from stats rows. */
+export function teamTotals(rows) {
+  return rows.reduce((t, r) => ({ calls: t.calls + (r.calls || 0), interested: t.interested + (r.interested || 0), won: t.won + (r.won || 0), revenue: t.revenue + (r.revenue || 0) }),
+    { calls: 0, interested: 0, won: 0, revenue: 0 });
+}
+/** Each level with progress; a level only counts as unlocked when every level below it is hit too. */
+export function ladderProgress(levels, totals) {
+  let open = true;
+  return levels.map((l, i) => {
+    const value = totals[l.metric] || 0;
+    const reached = value >= l.target;
+    const unlocked = open && reached;
+    const current = open && !reached;
+    if (!unlocked) open = false;
+    return { ...l, n: i + 1, value, pct: Math.min(100, Math.round((value / Math.max(1, l.target)) * 100)), unlocked, current, locked: !unlocked && !current };
+  });
+}

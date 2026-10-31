@@ -547,3 +547,13 @@ test("chat attachments: sent with the message, owned by the sender, size-limited
   await assertFails(updateDoc(doc(db, "chatFiles/f1"), { name: "x" }));
   await assertSucceeds(deleteDoc(doc(as("owner"), "chatFiles/f1")));
 });
+
+test("team goal ladder: everyone active reads it, only admin sets it (max 5 levels)", async () => {
+  const levels = [{ metric: "calls", target: 600, prize: "Team lunch" }];
+  await assertFails(setDoc(doc(as("w1"), "settings/ladder"), { levels }));
+  await assertSucceeds(setDoc(doc(as("owner"), "settings/ladder"), { levels, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(as("owner"), "settings/ladder"), { levels: Array(6).fill(levels[0]) }));
+  await assertFails(setDoc(doc(as("owner"), "settings/ladder"), { levels, hacked: true }));
+  await assertSucceeds(getDoc(doc(as("w1"), "settings/ladder")));
+  await assertFails(getDoc(doc(as("off"), "settings/ladder")));
+});

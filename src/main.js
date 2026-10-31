@@ -6,6 +6,7 @@ import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE, PAGE
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
   commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
+  LADDER_METRICS, DEFAULT_LADDER, teamTotals, ladderProgress,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -272,6 +273,7 @@ function screenChat() {
       </form>
     </section>`;
   const input = $("#chatText");
+  try { const draft = sessionStorage.getItem("arm_chat_draft"); if (draft) { input.value = draft; sessionStorage.removeItem("arm_chat_draft"); setTimeout(() => { input.focus(); input.setSelectionRange(draft.length, draft.length); }, 50); } } catch {}
   let pending = null; // attachment ready to send
   const drawPending = () => {
     const box = $("#chatAttach");
@@ -712,7 +714,8 @@ async function screenHome() {
   const today = perthDay();
   const hour = Number(new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Perth", hour: "numeric", hour12: false }).format(new Date()));
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  view().innerHTML = `<h1 class="page">${greet}, ${esc(state.me.name.split(" ")[0])}</h1><div id="homeBody"><div class="loading"><span class="spinner"></span></div></div>`;
+  view().innerHTML = `<h1 class="page">${greet}, ${esc(state.me.name.split(" ")[0])}</h1><div id="ladderBox"></div><div id="homeBody"><div class="loading"><span class="spinner"></span></div></div>`;
+  drawLadder(state.routeId);
   const rid = state.routeId;
   const monthStart = today.slice(0, 8) + "01";
   const HOME_KEY = `arm_home2_${state.me.id}`; // v2: calls keep leadId (payment-aware commission)
@@ -1431,6 +1434,46 @@ async function showAfterWon(lead, value) {
 // =====================================================================
 // Leaderboard
 // =====================================================================
+// ---------- team goal ladder (shown on Home and the Leaderboard) ----------
+async function drawLadder(rid) {
+  try {
+    const levels = await D.getLadder();
+    const box = $("#ladderBox");
+    if (!box || rid !== state.routeId) return;
+    if (!levels?.length) {
+      box.innerHTML = isAdmin() ? `<a class="card ladder-setup" href="#team">🪜 <span><b>Set up a team goal ladder</b><small>Shared monthly targets that unlock prizes for everyone. Admin → Team</small></span></a>` : "";
+      return;
+    }
+    const today = perthDay();
+    const month = today.slice(0, 7);
+    const totals = teamTotals(await D.getStatsSince(`${month}-01`));
+    if (!$("#ladderBox") || rid !== state.routeId) return;
+    const prog = ladderProgress(levels, totals);
+    const unlocked = prog.filter((l) => l.unlocked).length;
+    const monthName = new Date(`${month}-15T12:00:00+08:00`).toLocaleString("en-AU", { month: "long", timeZone: "Australia/Perth" });
+    $("#ladderBox").innerHTML = `<section class="card ladder">
+      <div class="ladder-head"><h2>🪜 Team goal ladder <span class="muted small">${esc(monthName)}</span></h2>
+        <span class="ladder-count">${unlocked} / ${prog.length} unlocked</span></div>
+      <p class="muted small">Hit a level together and everyone gets the prize. Each level opens once the one before it is done.</p>
+      <ol class="rungs">${prog.slice().reverse().map((l) => `<li class="rung ${l.unlocked ? "done" : l.current ? "now" : "locked"}">
+        <span class="rung-n">${l.unlocked ? "✓" : l.locked ? "🔒" : l.n}</span>
+        <div class="rung-body"><div class="rung-top"><b>${esc(l.prize)}</b><span>${LADDER_METRICS[l.metric].fmt(Math.min(l.value, l.target))} / ${LADDER_METRICS[l.metric].fmt(l.target)} ${esc(LADDER_METRICS[l.metric].label)}</span></div>
+          <div class="bar"><span style="width:${l.locked ? 0 : l.pct}%"></span></div></div></li>`).join("")}</ol>
+      <button class="linkbtn" id="ladderIdea">💡 Suggest a prize</button>
+    </section>`;
+    $("#ladderIdea").addEventListener("click", () => { sessionStorage.setItem("arm_chat_draft", "Prize idea for the team ladder: "); location.hash = "#chat"; });
+    // celebrate a level the first time this person sees it unlocked
+    const key = `arm_ladder_${state.me.id}_${month}`;
+    let seen = 0; try { seen = Number(localStorage.getItem(key) || 0); } catch {}
+    if (unlocked > seen) {
+      try { localStorage.setItem(key, String(unlocked)); } catch {}
+      const got = prog.filter((l) => l.unlocked && l.n > seen);
+      if (seen > 0 || got.length) { confetti(); showModal(`<div class="won-head"><span>🪜</span><h2>Level ${got[got.length - 1].n} unlocked!</h2>
+        <p>${got.map((l) => `<b>${esc(l.prize)}</b>`).join("<br>")}</p><p class="muted">The whole team did this. Next level's waiting.</p></div>`); }
+    }
+  } catch (e) { console.warn("ladder", e); }
+}
+
 function screenBoard() {
   setTitle("Leaderboard");
   const today = perthDay();
@@ -1438,9 +1481,11 @@ function screenBoard() {
   let tab = sessionStorage.getItem("arm_board") || "today";
   view().innerHTML = `
     <h1 class="page">Leaderboard</h1>
+    <div id="ladderBox"></div>
     <div class="chips"><button class="chip" data-b="today">Today</button><button class="chip" data-b="week">This week</button></div>
     <div id="boardBody"><div class="loading"><span class="spinner"></span></div></div>
     <p class="muted small">Points: each lead you call 1 (once a day) · Interested +3 · Won +10 (once per lead). Weeks start Monday (Perth time).</p>`;
+  drawLadder(state.routeId);
   let rows = { today: [], week: [] };
   const draw = () => {
     if (!$("#boardBody")) return;
@@ -1941,6 +1986,13 @@ async function screenTeam() {
       <div class="inline wide"><input id="gToken" type="password" placeholder="${state.googleToken ? "Saved. Paste a new one to replace it" : "apify_api_..."}" spellcheck="false">
         <button class="primary" type="submit">Save</button></div>
     </form>
+    <form class="card" id="ladderForm">
+      <h2>🪜 Team goal ladder</h2>
+      <p class="muted small">Shared targets for the whole team this month. Each level unlocks a prize everyone gets, once the level before it is hit. Resets on the 1st. Tip: ask the team in chat what prizes they'd want, people don't fight a plan they helped make.</p>
+      <div id="ladderRows"></div>
+      <div class="toolbar"><button type="button" class="ghost small" id="ladderAdd">+ Add level</button><button type="button" class="linkbtn" id="ladderClear">Turn the ladder off</button></div>
+      <button type="submit" class="primary">Save ladder</button>
+    </form>
     <section class="card"><h2>📘 New worker guide</h2><p class="muted small">New workers see a step-by-step <b>Start here</b> guide the first time they log in: how to find businesses, call, log results, and how they get paid. Just give them their login.</p>
       <a class="ghost wide-btn" href="#start">Preview the guide</a></section>
     <form class="card" id="briefForm">
@@ -1982,6 +2034,31 @@ async function screenTeam() {
       <div class="inline"><input id="goal" type="number" min="1" max="500" value="${state.goal}" aria-label="Daily call goal"><button class="primary" type="submit">Save</button></div>
     </form>
     <section class="card"><h2>Everyone</h2><div id="teamList"><div class="loading"><span class="spinner"></span></div></div></section>`;
+  // team goal ladder editor
+  let ladder = [];
+  const drawLadderRows = () => {
+    $("#ladderRows").innerHTML = ladder.map((l, i) => `<div class="ladder-row" data-i="${i}">
+      <span class="rung-n">${i + 1}</span>
+      <select data-f="metric" aria-label="Level ${i + 1} target">${Object.entries(LADDER_METRICS).map(([k, m]) => `<option value="${k}" ${k === l.metric ? "selected" : ""}>${esc(m.label)}</option>`).join("")}</select>
+      <input data-f="target" type="number" min="1" max="1000000" value="${esc(String(l.target))}" aria-label="Level ${i + 1} amount">
+      <input data-f="prize" maxlength="80" value="${esc(l.prize)}" placeholder="Prize, e.g. Team lunch" aria-label="Level ${i + 1} prize">
+      <button type="button" class="linkbtn" data-del-level="${i}" aria-label="Remove level ${i + 1}">✕</button></div>`).join("") || `<p class="muted small">No levels. Add one, or save with none to turn the ladder off.</p>`;
+    $("#ladderRows").querySelectorAll("[data-del-level]").forEach((b) => b.addEventListener("click", () => { readLadder(); ladder.splice(Number(b.dataset.delLevel), 1); drawLadderRows(); }));
+    $("#ladderAdd").disabled = ladder.length >= 5;
+  };
+  const readLadder = () => { ladder = [...$("#ladderRows").querySelectorAll(".ladder-row")].map((r) => ({
+    metric: r.querySelector('[data-f="metric"]').value, target: Math.round(Number(r.querySelector('[data-f="target"]').value) || 0), prize: r.querySelector('[data-f="prize"]').value.trim() })); };
+  D.getLadder().then((l) => { ladder = l?.length ? l : DEFAULT_LADDER.map((x) => ({ ...x })); drawLadderRows(); }).catch(() => { ladder = []; drawLadderRows(); });
+  $("#ladderAdd").addEventListener("click", () => { readLadder(); if (ladder.length < 5) ladder.push({ metric: "calls", target: 100, prize: "" }); drawLadderRows(); });
+  $("#ladderClear").addEventListener("click", () => { ladder = []; drawLadderRows(); });
+  $("#ladderForm").addEventListener("submit", async (e) => {
+    e.preventDefault(); readLadder();
+    if (ladder.some((l) => !(l.target > 0) || !l.prize)) return toast("Every level needs an amount and a prize", "bad");
+    await busy(e.submitter || $("#ladderForm button[type=submit]"), "Saving", async () => {
+      try { await D.saveLadder(ladder); toast(ladder.length ? "Ladder saved. The team can see it on Home and the Leaderboard." : "Ladder turned off"); }
+      catch (err) { toast(D.authMessage(err), "bad"); }
+    });
+  });
   let briefTouched = false;
   $("#briefForm").addEventListener("input", () => { briefTouched = true; });
   D.getBriefSettings().then((b) => {

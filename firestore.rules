@@ -81,6 +81,13 @@ service cloud.firestore {
         && (!('pageSpeedKey' in request.resource.data) || shortString(request.resource.data.pageSpeedKey, 100));
     }
     // Website packages (Starter / Pro / Premium): everyone reads, admin edits
+    // Team goal ladder (shared monthly targets that unlock prizes for everyone)
+    match /settings/ladder {
+      allow read: if isActive();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['levels', 'updatedAt'])
+        && request.resource.data.levels is list && request.resource.data.levels.size() <= 5;
+    }
     match /settings/packages {
       allow read: if true; // shown on the public website
       allow write: if isAdmin() && request.resource.data.list is list && request.resource.data.list.size() <= 6;

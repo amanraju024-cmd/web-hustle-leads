@@ -389,6 +389,13 @@ export function watchPresence(cb, onErr) {
   }, onErr);
 }
 
+// ---------- team goal ladder ----------
+export async function getLadder() {
+  const snap = await getDoc(doc(db, "settings", "ladder"));
+  return snap.exists() && Array.isArray(snap.data().levels) ? snap.data().levels : null;
+}
+export const saveLadder = (levels) => setDoc(doc(db, "settings", "ladder"), { levels, updatedAt: serverTimestamp() });
+
 // ---------- automatic follow-up emails (sent by scripts/follow-ups.mjs) ----------
 export const saveLeadEmail = (leadId, email) =>
   updateDoc(doc(db, "leads", leadId), { email, updatedAt: serverTimestamp() });
