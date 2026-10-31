@@ -440,8 +440,8 @@ export const saveBriefSettings = (s) => setDoc(doc(db, "settings", "brief"), s);
 
 // ---------- team chat ----------
 /** Sends a chat message. `file` (optional): { name, type, size, kind, data (data: URL), thumb?, w?, h? }. */
-export async function sendMessage(me, text, file) {
-  const msg = { uid: me.id, name: me.name, role: me.role, text: (text || "").slice(0, 1000), at: serverTimestamp() };
+export async function sendMessage(me, text, file, announce = false) {
+  const msg = { uid: me.id, name: me.name, role: me.role, text: (text || "").slice(0, 1000), at: serverTimestamp(), ...(announce ? { announce: true } : {}) };
   if (!file) return addDoc(collection(db, "messages"), msg);
   const fileRef = doc(collection(db, "chatFiles"));
   const b = writeBatch(db);

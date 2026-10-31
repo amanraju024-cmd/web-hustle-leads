@@ -583,3 +583,10 @@ test("chat polls: admin creates with a message, one changeable vote each, closed
   await assertSucceeds(getDoc(doc(as("w2"), "polls/p1/votes/w2")));
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "polls/p1")));
 });
+
+test("chat announcements to the WhatsApp group: admin only", async () => {
+  const base = { text: "Big week, team", at: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(as("owner"), "messages/a1"), { ...base, uid: "owner", name: "Aman", role: "admin", announce: true }));
+  await assertFails(setDoc(doc(as("w1"), "messages/a2"), { ...base, uid: "w1", name: "Sam", role: "worker", announce: true }));
+  await assertFails(setDoc(doc(as("owner"), "messages/a3"), { ...base, uid: "owner", name: "Aman", role: "admin", announce: "yes" }));
+});

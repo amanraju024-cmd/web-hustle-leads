@@ -107,8 +107,12 @@ export async function morningScoreboard(db, now = new Date()) {
   if (rec.length) lines.push("", ...rec);
   if (isMonday) {
     const lastWeek = weekStart(addDays(today, -7));
-    const hof = hallOfFame(history.filter((r) => r.day >= lastWeek && r.day < weekStart(today)));
+    const weekRows = history.filter((r) => r.day >= lastWeek && r.day < weekStart(today));
+    const hof = hallOfFame(weekRows);
     if (hof.length) lines.push("", ...hof);
+    const [users, team] = await Promise.all([db.collection("users").get(), db.doc("settings/team").get()]);
+    const workers = users.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => u.active && u.role !== "admin");
+    if (workers.length) lines.push("", ...hallOfShame(weekRows, workers, (team.exists && team.data().dailyGoal) || 30));
   }
   const ladder = await ladderLine(db, now);
   if (ladder) lines.push("", ladder);
@@ -135,6 +139,82 @@ export async function middayCheckIn(db, now = new Date()) {
   return `${head}\nA strong afternoon gets us there. Best calling time is 2–4pm.`;
 }
 
+// 💡 Practical tips for the 9am shift message (one a day, rotating)
+export const TIPS = [
+  "Smile when you dial. People can hear it in your voice.",
+  "Ask a question in the first 10 seconds: \"Do you have a website at the moment?\" Then listen.",
+  "Use their suburb. \"People in Willetton Google you first\" lands better than a generic line.",
+  "If they're busy, book a time: \"Morning or arvo tomorrow?\" Two options, not an open question.",
+  "Write a note after every call. Future you will thank you on the call-back.",
+  "Call-backs first, every day. They already said \"call me later\", so they're the warmest leads you've got.",
+  "Best calling windows are roughly 9 to 11:30am and 2 to 4pm. Skip cafés over lunch.",
+  "\"Too expensive?\" Ask what one normal customer is worth to them. One or two extra pays for the site.",
+  "Don't argue with a no. Thank them, leave the door open, move on. Your next yes is a dial away.",
+  "Stand up for your calls if you can. More energy, better calls.",
+  "After a yes, text the examples while you're still on the phone. Strike while it's warm.",
+  "Old website? Mention the exact problem the app found. Specific beats salesy.",
+  "Ten calls in a row without a break beats thirty spread through the day.",
+  "Interested leads go cold in three days. Follow up before then.",
+  "Say their business name back to them. It shows you actually looked them up.",
+  "If you get the owner's name, use it on the call-back. It changes the whole conversation.",
+  "Short calls are fine. The goal of the first call is a next step, not a sale.",
+  "Offer the review card when they hesitate on a website. A small yes now, a big yes later.",
+  "Log every call honestly, even the no answers. The numbers only help you if they're real.",
+  "End each call with what happens next: \"I'll text you now, have a look tonight.\"",
+];
+const tipFor = (day) => TIPS[Math.abs([...day].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)) % TIPS.length];
+
+async function teamDay(db, today) {
+  const [stats, team, users, callbacks] = await Promise.all([
+    db.collection("stats").where("day", "==", today).get().then((q) => q.docs.map((d) => d.data())),
+    db.doc("settings/team").get().then((d) => (d.exists ? d.data() : {})),
+    db.collection("users").get().then((q) => q.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    db.collection("leads").where("status", "==", "Call back").get().then((q) => q.docs.map((d) => d.data())),
+  ]);
+  const workers = users.filter((u) => u.active && u.role !== "admin");
+  return { stats, goal: team.dailyGoal || 30, workers, callbacks };
+}
+
+/** 9am weekdays: shift start, today's goal, call-backs due, tip of the day. */
+export async function shiftStart(db, now = new Date()) {
+  const today = perthDay(now);
+  const { goal, workers, callbacks } = await teamDay(db, today);
+  if (!workers.length) return "";
+  const endOfToday = new Date(`${addDays(today, 1)}T00:00:00+08:00`).getTime();
+  const due = callbacks.filter((l) => !l.callbackAt || (l.callbackAt.toMillis?.() || 0) < endOfToday).length;
+  return [`🟢 *Shift's on, team*`,
+    `🎯 Today's goal: *${goal} calls each* (${goal * workers.length} as a team)`,
+    due ? `📞 ${due} call-back${due === 1 ? "" : "s"} due today. Do those first, they're the warmest leads.` : "📞 No call-backs due. Straight into new leads.",
+    "", `💡 *Tip of the day:* ${tipFor(today)}`].join("\n");
+}
+
+/** 5pm weekdays: day wrap, who hit the goal (positive naming only). */
+export async function dayWrap(db, now = new Date()) {
+  const today = perthDay(now);
+  const { stats, goal, workers } = await teamDay(db, today);
+  if (!workers.length) return "";
+  const t = teamTotals(stats), target = goal * workers.length;
+  const hit = stats.filter((s) => (s.calls || 0) >= goal).sort((a, b) => b.calls - a.calls);
+  const top = stats.filter((s) => s.calls > 0).sort((a, b) => (b.points || 0) - (a.points || 0) || b.calls - a.calls)[0];
+  const lines = [`🔚 *Day wrap*`, `📞 ${t.calls} of ${target} calls (${Math.round((t.calls / Math.max(1, target)) * 100)}%) · 🔥 ${t.interested} interested · 💰 ${t.won} won`];
+  if (hit.length) lines.push(`✅ Hit the goal today: ${hit.map((s) => `${firstName(s.name)} (${s.calls})`).join(", ")}`);
+  if (top) lines.push(`👑 Top today: *${firstName(top.name)}*`);
+  lines.push(t.calls >= target ? "Team goal done. Proud of this one." : "Get your call-backs booked for tomorrow and log your notes. We go again in the morning.");
+  return lines.join("\n");
+}
+
+/** Monday: who did under half the weekly call target last week, with a way back. */
+function hallOfShame(weekRows, workers, goal) {
+  const target = goal * 5, half = Math.ceil(target / 2);
+  const calls = new Map();
+  for (const r of weekRows) calls.set(r.uid, (calls.get(r.uid) || 0) + (r.calls || 0));
+  const low = workers.map((w) => ({ name: w.name, calls: calls.get(w.id) || 0 })).filter((w) => w.calls < half).sort((a, b) => a.calls - b.calls);
+  if (!low.length) return ["🙌 Nobody in the Hall of Shame this week. Everyone pulled their weight."];
+  return ["🐢 *Hall of Shame: last week* (under half the target of " + target + " calls)",
+    ...low.map((w) => `• ${firstName(w.name)}: ${w.calls} calls`),
+    "This week's a fresh start. Beat your number and you're off the list. Stuck on the script? Ask in chat, we'll help."];
+}
+
 async function ladderState(db, now) {
   const snap = await db.doc("settings/ladder").get();
   const levels = snap.exists ? snap.data().levels || [] : [];
@@ -152,6 +232,50 @@ async function ladderLine(db, now) {
   return `🪜 Team goal: *${next.prize}* is ${next.metric === "revenue" ? `${m.fmt(gap)} in sales` : `${gap} ${ladderUnit(m.label, gap)}`} away`;
 }
 
+/** Posts anything that changed for the team since last run. First run only records a baseline. */
+async function teamChanges(db, state, patch) {
+  const log = [];
+  const base = !state.changes; // first run: remember everything, post nothing
+  const prev = state.changes || {};
+  const next = { ...prev };
+  const [ladderSnap, teamSnap, pkgSnap, usersSnap] = await Promise.all([
+    db.doc("settings/ladder").get(), db.doc("settings/team").get(), db.doc("settings/packages").get(), db.collection("users").get()]);
+  // 🪜 team goals set or changed
+  const lad = ladderSnap.exists ? ladderSnap.data() : null;
+  const ladAt = lad?.updatedAt?.toMillis?.() || 0;
+  if (ladAt && ladAt !== prev.ladderAt) {
+    if (!base && lad.levels?.length) await postToGroup(["🪜 *Team goals are set*", ...lad.levels.map((l, i) => `${i + 1}. ${LADDER_METRICS[l.metric]?.fmt(l.target) || l.target} ${l.metric === "revenue" ? "in sales" : LADDER_METRICS[l.metric]?.label || ""} → *${l.prize}*`), "Hit them together and everyone gets the prize. Track it on Home in the app."].join("\n"));
+    if (!base && !lad.levels?.length) await postToGroup("🪜 The team goal ladder is off for now.");
+    next.ladderAt = ladAt; if (!base) log.push("whatsapp group: ladder change");
+  }
+  // 🎯 daily goal
+  const goal = teamSnap.exists ? teamSnap.data().dailyGoal || 30 : 30;
+  if (goal !== prev.dailyGoal) { if (!base && prev.dailyGoal) await postToGroup(`🎯 *New daily goal: ${goal} calls each.*\nYou've got this.`); next.dailyGoal = goal; if (!base) log.push("whatsapp group: goal change"); }
+  // 📦 packages
+  const list = pkgSnap.exists ? pkgSnap.data().list || [] : [];
+  const sig = JSON.stringify(list.map((p) => [p.name, p.price]));
+  if (list.length && sig !== prev.packages) {
+    if (!base && prev.packages) await postToGroup(["📦 *Package prices updated*", ...list.map((p) => `• ${p.name}: $${Math.round(p.price)}`), "The app already shows the new prices."].join("\n"));
+    next.packages = sig; if (!base) log.push("whatsapp group: packages change");
+  }
+  // 👋 new team members
+  const workers = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => u.active && u.role !== "admin");
+  const known = new Set(prev.workers || []);
+  for (const w of workers) if (!base && !known.has(w.id)) { await postToGroup(`👋 *Welcome ${firstName(w.name)} to the AR Methods team!*\nSay hi, and show them how it's done.`); log.push(`whatsapp group: welcome ${w.name}`); }
+  next.workers = workers.map((w) => w.id);
+  // 📊 polls and 📣 announcements from the app
+  const since = prev.feedAt || Date.now();
+  if (!base) {
+    const polls = (await db.collection("polls").where("at", ">", new Date(since)).get()).docs.map((d) => d.data()).sort((a, b) => a.at.toMillis() - b.at.toMillis());
+    for (const p of polls) { await postToGroup(`📊 *New poll:* ${p.question}\nVote in Team chat in the app.`); log.push("whatsapp group: poll"); }
+    const ann = (await db.collection("messages").where("at", ">", new Date(since)).get()).docs.map((d) => d.data()).filter((m) => m.announce && m.role === "admin").sort((a, b) => a.at.toMillis() - b.at.toMillis());
+    for (const m of ann) { await postToGroup(`📣 *From ${firstName(m.name)}:*\n${m.text}`); log.push("whatsapp group: announcement"); }
+  }
+  next.feedAt = Date.now();
+  patch.changes = next;
+  return log;
+}
+
 /** Hourly: new deals, ladder levels unlocked, new enquiries / NFC orders. Holds everything during quiet hours. */
 export async function hourlyGroupUpdates(db, now = new Date()) {
   const log = [];
@@ -161,8 +285,22 @@ export async function hourlyGroupUpdates(db, now = new Date()) {
   const state = (await stateRef.get()).data() || {};
   const since = state.lastWonAt?.toMillis ? state.lastWonAt.toMillis() : Date.now() - 2 * 3600e3;
   const patch = {};
+  const today = perthDay(now), dow = new Date(`${today}T12:00:00+08:00`).getUTCDay(), hour = perthHour(now);
+  const weekday = dow >= 1 && dow <= 5;
+  // 🟢 9am shift start / 🔚 5pm day wrap (weekdays, once a day)
+  if (weekday && hour >= 9 && hour < 11 && state.shiftDay !== today) {
+    const msg = await shiftStart(db, now);
+    if (msg) { await postToGroup(msg); log.push("whatsapp group: shift start"); }
+    patch.shiftDay = today;
+  }
+  if (weekday && hour >= 17 && hour < 19 && state.wrapDay !== today) {
+    const msg = await dayWrap(db, now);
+    if (msg) { await postToGroup(msg); log.push("whatsapp group: day wrap"); }
+    patch.wrapDay = today;
+  }
+  // 📣 team changes and announcements
+  log.push(...await teamChanges(db, state, patch));
   // 🕐 1pm weekday check-in (once a day)
-  const today = perthDay(now), dow = new Date(`${today}T12:00:00+08:00`).getUTCDay();
   if (perthHour(now) >= 13 && perthHour(now) < 15 && dow >= 1 && dow <= 5 && state.middayDay !== today) {
     const msg = await middayCheckIn(db, now);
     if (msg) { await postToGroup(msg); log.push("whatsapp group: midday check-in"); }

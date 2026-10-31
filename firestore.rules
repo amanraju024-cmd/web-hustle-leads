@@ -442,7 +442,8 @@ service cloud.firestore {
     match /messages/{id} {
       allow read: if isActive();
       allow create: if isActive()
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'role', 'text', 'at', 'file', 'poll'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'role', 'text', 'at', 'file', 'poll', 'announce'])
+        && (!('announce' in request.resource.data) || (isAdmin() && request.resource.data.announce == true && request.resource.data.text.size() >= 1))
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.name == profile().name
         && request.resource.data.role == profile().role

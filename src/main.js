@@ -266,6 +266,7 @@ function screenChat() {
       <div class="chat-list" id="chatList" aria-live="polite"><div class="loading"><span class="spinner"></span></div></div>
       <div class="chat-quick">${QUICK_MSGS.map((q, i) => `<button class="chip" data-q="${i}">${esc(q)}</button>`).join("")}</div>
       <div class="chat-attach" id="chatAttach" hidden></div>
+      ${isAdmin() ? `<label class="check chat-announce"><input type="checkbox" id="chatAnnounce"> 📣 Also post to the team WhatsApp group</label>` : ""}
       <form class="chat-form" id="chatForm">
         <label class="chat-clip" title="Add a photo or file" aria-label="Add a photo or file">📎<input type="file" id="chatFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip" hidden></label>
         ${isAdmin() ? `<button type="button" class="chat-clip" id="chatPoll" title="Start a poll" aria-label="Start a poll">📊</button>` : ""}
@@ -299,7 +300,8 @@ function screenChat() {
     const file = pending, btn = $("#chatSend");
     input.value = ""; input.style.height = ""; pending = null; drawPending();
     if (file) { btn.disabled = true; btn.textContent = "Sending…"; }
-    try { await D.sendMessage(state.me, text, file); }
+    const announce = !!$("#chatAnnounce")?.checked && !!text;
+    try { await D.sendMessage(state.me, text, file, announce); if (announce) { $("#chatAnnounce").checked = false; toast("Sent. It'll go to the WhatsApp group within the hour."); } }
     catch (e) { input.value = text; pending = file; drawPending(); toast(D.authMessage(e), "bad"); }
     finally { btn.disabled = false; btn.textContent = "Send"; }
   };
@@ -330,7 +332,7 @@ function drawChat() {
       ${mine ? "" : `<span class="msg-name">${esc(m.name)}${m.role === "admin" ? ' <em class="role">CEO</em>' : ""}</span>`}
       ${m.file ? attachmentHtml(m.file) : ""}
       ${m.poll ? `<div class="poll" data-poll="${esc(m.poll.id)}">${pollCache.has(m.poll.id) ? pollHtml(pollCache.get(m.poll.id)) : `<div class="loading"><span class="spinner"></span></div>`}</div>` : ""}
-      ${m.text ? `<div class="bubble">${esc(m.text).replace(/\n/g, "<br>")}</div>` : ""}
+      ${m.text ? `<div class="bubble">${m.announce ? '<span class="ann-tag">📣 Announcement</span>' : ""}${esc(m.text).replace(/\n/g, "<br>")}</div>` : ""}
       <span class="msg-meta">${esc(fmtTime(d))}${isAdmin() ? ` · <button class="linkbtn" data-del="${esc(m.id)}" data-delfile="${esc(m.file?.id || "")}">Delete</button>` : ""}</span>
     </div>`;
   }).join("");
