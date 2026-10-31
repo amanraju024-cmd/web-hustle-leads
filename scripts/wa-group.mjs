@@ -202,3 +202,11 @@ export async function hourlyGroupUpdates(db, now = new Date()) {
   if (!env.DRY_RUN && Object.keys(patch).length) await stateRef.set({ ...patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return log;
 }
+
+// `node scripts/wa-group.mjs test` (the "WhatsApp group test" workflow): one message to prove the connection works
+if (import.meta.url === `file://${process.argv[1]}` && process.argv[2] === "test") {
+  if (!waConfigured()) { console.error("Missing GREEN_API_ID / GREEN_API_TOKEN secrets or WA_GROUP_NAME variable"); process.exit(1); }
+  postToGroup("✅ *AR Methods team updates are connected.*\nYou'll get the morning scoreboard at 7:30am, a midday check-in on weekdays, and shout-outs when deals are signed.")
+    .then(() => console.log(`posted to "${process.env.WA_GROUP_NAME || process.env.WA_GROUP_ID}"`))
+    .catch((e) => { console.error(e.message); process.exit(1); });
+}
