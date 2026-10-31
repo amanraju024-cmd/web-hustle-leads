@@ -21,7 +21,7 @@ Owner: Aman Raju (CEO, AR Methods, Perth WA web design). Sales team cold-calls l
 
 ## Automations (GitHub Actions)
 - `morning-brief.yml` 7:30am Perth: owner brief (email, iPhone spoken link, WhatsApp via CallMeBot when available) + worker progress emails on weekdays. Each channel sends once per day.
-- Team WhatsApp group (`scripts/wa-group.mjs`, Green-API free plan, owner's own number linked): morning scoreboard + hourly deal alerts, ladder unlocks, enquiries/NFC orders. Quiet 9pm–7am Perth. Secrets GREEN_API_ID / GREEN_API_TOKEN, variables GREEN_API_URL / WA_GROUP_NAME. Off until those are set.
+- Team WhatsApp group (`scripts/wa-group.mjs`, Green-API free plan, owner's own number linked): morning scoreboard with crown, personal bests, streaks and Monday Hall of Fame; 1pm weekday check-in; hourly deal alerts, ladder unlocks, enquiries/NFC orders. Recognition only, nobody called out, professional tone. Quiet 9pm–7am Perth. Secrets GREEN_API_ID / GREEN_API_TOKEN, variables GREEN_API_URL / WA_GROUP_NAME. Off until those are set.
 - `follow-ups.yml` hourly: website/NFC enquiries (email owner, auto-reply) and 4-step follow-up emails for Interested leads (weekdays 8am–6pm).
 
 ## Testing
