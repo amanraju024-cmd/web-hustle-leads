@@ -382,6 +382,50 @@ service cloud.firestore {
         && existsAfter(/databases/$(database)/documents/chatFiles/$(f.id))
         && getAfter(/databases/$(database)/documents/chatFiles/$(f.id)).data.uid == request.auth.uid;
     }
+    // Chat polls: the message points at a poll; one vote per person (changeable until the poll is closed)
+    function chatPollOk(p) {
+      return p is map && p.keys().hasOnly(['id']) && p.id is string && p.id.size() <= 40
+        && existsAfter(/databases/$(database)/documents/polls/$(p.id))
+        && getAfter(/databases/$(database)/documents/polls/$(p.id)).data.uid == request.auth.uid;
+    }
+    function optionsOk(o) {
+      return o is list && o.size() >= 2 && o.size() <= 6
+        && o[0] is string && o[0].size() >= 1 && o[0].size() <= 60
+        && o[1] is string && o[1].size() >= 1 && o[1].size() <= 60
+        && (o.size() < 3 || (o[2] is string && o[2].size() >= 1 && o[2].size() <= 60))
+        && (o.size() < 4 || (o[3] is string && o[3].size() >= 1 && o[3].size() <= 60))
+        && (o.size() < 5 || (o[4] is string && o[4].size() >= 1 && o[4].size() <= 60))
+        && (o.size() < 6 || (o[5] is string && o[5].size() >= 1 && o[5].size() <= 60));
+    }
+    match /polls/{pollId} {
+      allow read: if isActive();
+      // only admins start polls; everyone active votes
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'question', 'options', 'closed', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name == profile().name
+        && shortString(request.resource.data.question, 140) && request.resource.data.question.size() >= 1
+        && optionsOk(request.resource.data.options)
+        && request.resource.data.closed == false
+        && request.resource.data.at == request.time;
+      // the person who made it (or admin) can close it; nothing else changes
+      allow update: if isActive() && (resource.data.uid == request.auth.uid || isAdmin())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['closed'])
+        && request.resource.data.closed == true;
+      allow delete: if isAdmin();
+      match /votes/{uid} {
+        function poll() { return get(/databases/$(database)/documents/polls/$(pollId)).data; }
+        allow read: if isActive();
+        allow create, update: if isActive() && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['choice', 'name', 'at'])
+          && request.resource.data.name == profile().name
+          && request.resource.data.choice is int
+          && request.resource.data.choice >= 0 && request.resource.data.choice < poll().options.size()
+          && poll().closed == false
+          && request.resource.data.at == request.time;
+        allow delete: if isAdmin();
+      }
+    }
     match /chatFiles/{id} {
       allow read: if isActive();
       allow create: if isActive()
@@ -398,13 +442,14 @@ service cloud.firestore {
     match /messages/{id} {
       allow read: if isActive();
       allow create: if isActive()
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'role', 'text', 'at', 'file'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'role', 'text', 'at', 'file', 'poll'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.name == profile().name
         && request.resource.data.role == profile().role
         && request.resource.data.text is string
         && request.resource.data.text.size() <= 1000
-        && (request.resource.data.text.size() >= 1 || 'file' in request.resource.data)
+        && (request.resource.data.text.size() >= 1 || 'file' in request.resource.data || 'poll' in request.resource.data)
+        && (!('poll' in request.resource.data) || chatPollOk(request.resource.data.poll))
         && (!('file' in request.resource.data) || chatFileOk(request.resource.data.file))
         && request.resource.data.at == request.time;
       allow update: if false;

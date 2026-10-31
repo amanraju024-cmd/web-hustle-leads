@@ -451,6 +451,24 @@ export async function sendMessage(me, text, file) {
   b.set(doc(collection(db, "messages")), { ...msg, file: meta });
   return b.commit();
 }
+// ---------- chat polls ----------
+export async function sendPoll(me, question, options) {
+  const pollRef = doc(collection(db, "polls"));
+  const b = writeBatch(db);
+  b.set(pollRef, { uid: me.id, name: me.name, question: question.slice(0, 140), options: options.map((o) => o.slice(0, 60)), closed: false, at: serverTimestamp() });
+  b.set(doc(collection(db, "messages")), { uid: me.id, name: me.name, role: me.role, text: "", poll: { id: pollRef.id }, at: serverTimestamp() });
+  return b.commit();
+}
+export function watchPoll(id, cb, onErr) {
+  let poll = null, votes = [];
+  const emit = () => poll && cb({ ...poll, votes });
+  const u1 = onSnapshot(doc(db, "polls", id), (s) => { poll = s.exists() ? { id, ...s.data() } : null; emit(); }, onErr);
+  const u2 = onSnapshot(collection(db, "polls", id, "votes"), (s) => { votes = s.docs.map((d) => ({ uid: d.id, ...d.data() })); emit(); }, onErr);
+  return () => { u1(); u2(); };
+}
+export const votePoll = (me, id, choice) => setDoc(doc(db, "polls", id, "votes", me.id), { choice, name: me.name, at: serverTimestamp() });
+export const closePoll = (id) => updateDoc(doc(db, "polls", id), { closed: true });
+
 export async function getChatFile(id) {
   const snap = await getDoc(doc(db, "chatFiles", id));
   return snap.exists() ? snap.data() : null;

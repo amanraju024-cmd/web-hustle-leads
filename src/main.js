@@ -250,7 +250,7 @@ function chatPopup(m) {
   const el = document.createElement("a");
   el.href = "#chat";
   el.className = "celebrate chat";
-  el.innerHTML = `<span class="ce-icon">💬</span><span><b>${esc(m.name)}${m.role === "admin" ? " (CEO)" : ""}:</b> ${m.text ? `${esc(m.text.slice(0, 90))}${m.text.length > 90 ? "…" : ""}` : m.file ? (m.file.kind === "image" ? "📷 Photo" : `📎 ${esc(m.file.name)}`) : ""}</span>`;
+  el.innerHTML = `<span class="ce-icon">💬</span><span><b>${esc(m.name)}${m.role === "admin" ? " (CEO)" : ""}:</b> ${m.text ? `${esc(m.text.slice(0, 90))}${m.text.length > 90 ? "…" : ""}` : m.file ? (m.file.kind === "image" ? "📷 Photo" : `📎 ${esc(m.file.name)}`) : m.poll ? "📊 New poll, go vote" : ""}</span>`;
   document.body.appendChild(el);
   setTimeout(() => el.classList.add("show"), 20);
   setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 5000);
@@ -268,6 +268,7 @@ function screenChat() {
       <div class="chat-attach" id="chatAttach" hidden></div>
       <form class="chat-form" id="chatForm">
         <label class="chat-clip" title="Add a photo or file" aria-label="Add a photo or file">📎<input type="file" id="chatFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip" hidden></label>
+        ${isAdmin() ? `<button type="button" class="chat-clip" id="chatPoll" title="Start a poll" aria-label="Start a poll">📊</button>` : ""}
         <textarea id="chatText" rows="1" maxlength="1000" placeholder="Message the team…" aria-label="Message"></textarea>
         <button class="primary" aria-label="Send" id="chatSend">Send</button>
       </form>
@@ -303,6 +304,8 @@ function screenChat() {
     finally { btn.disabled = false; btn.textContent = "Send"; }
   };
   $("#chatForm").addEventListener("submit", (e) => { e.preventDefault(); send(input.value); input.focus(); });
+  $("#chatPoll")?.addEventListener("click", openPollMaker);
+  state.unsub.push(() => { for (const u of pollWatch.values()) u(); pollWatch.clear(); });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); } });
   input.addEventListener("input", () => { input.style.height = ""; input.style.height = Math.min(140, input.scrollHeight) + "px"; });
   view().querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", () => send(QUICK_MSGS[Number(b.dataset.q)])));
@@ -326,6 +329,7 @@ function drawChat() {
     return `${sep}<div class="msg ${mine ? "mine" : ""} ${m.role === "admin" ? "ceo" : ""}">
       ${mine ? "" : `<span class="msg-name">${esc(m.name)}${m.role === "admin" ? ' <em class="role">CEO</em>' : ""}</span>`}
       ${m.file ? attachmentHtml(m.file) : ""}
+      ${m.poll ? `<div class="poll" data-poll="${esc(m.poll.id)}">${pollCache.has(m.poll.id) ? pollHtml(pollCache.get(m.poll.id)) : `<div class="loading"><span class="spinner"></span></div>`}</div>` : ""}
       ${m.text ? `<div class="bubble">${esc(m.text).replace(/\n/g, "<br>")}</div>` : ""}
       <span class="msg-meta">${esc(fmtTime(d))}${isAdmin() ? ` · <button class="linkbtn" data-del="${esc(m.id)}" data-delfile="${esc(m.file?.id || "")}">Delete</button>` : ""}</span>
     </div>`;
@@ -337,8 +341,83 @@ function drawChat() {
     try { await D.deleteMessage(b.dataset.del, b.dataset.delfile || null); } catch (e) { toast(D.authMessage(e), "bad"); }
   }));
   list.querySelectorAll("[data-open-file]").forEach((el) => el.addEventListener("click", () => openAttachment(el.dataset.openFile)));
+  list.querySelectorAll("[data-poll]").forEach((el) => { wirePoll(el); watchPollCard(el.dataset.poll); });
   list.querySelectorAll(".att-img img").forEach((img) => img.addEventListener("load", () => { if (nearBottom || list.dataset.first !== "1") list.scrollTop = list.scrollHeight; }, { once: true }));
   list.dataset.first = "1";
+}
+
+// ---------- chat polls ----------
+const pollWatch = new Map(), pollCache = new Map();
+const POLL_TEMPLATES = [
+  { label: "🎁 Ladder prize vote", question: "Which prize should we go for on this month's team ladder?", options: ["Team lunch", "$20 bonus each", "$30 gift card each", "Early finish Friday", "Team night out"] },
+  { label: "📍 Next suburb", question: "Which area should we hit next?", options: ["Southern suburbs", "Northern suburbs", "Eastern suburbs", "Fremantle & coast"] },
+  { label: "📅 Team catch-up", question: "Best time for a quick team catch-up?", options: ["Monday morning", "Wednesday arvo", "Friday morning"] },
+  { label: "🎯 Daily goal", question: "What should our daily call goal be?", options: ["25 calls", "30 calls", "40 calls", "50 calls"] },
+];
+function openPollMaker() {
+  showModal(`<h2>Start a poll</h2>
+    <div class="chips poll-tpl">${POLL_TEMPLATES.map((t, i) => `<button type="button" class="chip" data-tpl="${i}">${esc(t.label)}</button>`).join("")}</div>
+    <form id="pollForm">
+      <label for="pollQ">Question</label><input id="pollQ" maxlength="140" placeholder="e.g. Which prize do we want?">
+      <label>Options</label><div id="pollOpts"></div>
+      <button type="button" class="linkbtn" id="pollAddOpt">+ Add option</button>
+      <button type="submit" class="primary wide-btn">Post poll</button>
+    </form>`, (wrap, close) => {
+    let opts = ["", ""];
+    const draw = () => {
+      wrap.querySelector("#pollOpts").innerHTML = opts.map((o, i) => `<div class="poll-opt-row"><input data-o="${i}" maxlength="60" value="${esc(o)}" placeholder="Option ${i + 1}" aria-label="Option ${i + 1}">${opts.length > 2 ? `<button type="button" class="linkbtn" data-rm="${i}" aria-label="Remove option ${i + 1}">✕</button>` : ""}</div>`).join("");
+      wrap.querySelectorAll("[data-o]").forEach((inp) => inp.addEventListener("input", () => { opts[Number(inp.dataset.o)] = inp.value; }));
+      wrap.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { opts.splice(Number(b.dataset.rm), 1); draw(); }));
+      wrap.querySelector("#pollAddOpt").hidden = opts.length >= 6;
+    };
+    draw();
+    wrap.querySelector("#pollAddOpt").addEventListener("click", () => { if (opts.length < 6) { opts.push(""); draw(); wrap.querySelector(`[data-o="${opts.length - 1}"]`).focus(); } });
+    wrap.querySelectorAll("[data-tpl]").forEach((b) => b.addEventListener("click", () => { const t = POLL_TEMPLATES[Number(b.dataset.tpl)]; wrap.querySelector("#pollQ").value = t.question; opts = [...t.options]; draw(); }));
+    wrap.querySelector("#pollForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = wrap.querySelector("#pollQ").value.trim();
+      const clean = opts.map((o) => o.trim()).filter(Boolean);
+      if (!q) return toast("Add a question", "bad");
+      if (clean.length < 2) return toast("Add at least 2 options", "bad");
+      if (new Set(clean.map((o) => o.toLowerCase())).size !== clean.length) return toast("Two options are the same", "bad");
+      await busy(e.submitter, "Posting", async () => {
+        try { await D.sendPoll(state.me, q, clean); close(); } catch (err) { toast(D.authMessage(err), "bad"); }
+      });
+    });
+  });
+}
+function pollHtml(p) {
+  const total = p.votes.length;
+  const mine = p.votes.find((v) => v.uid === state.me.id)?.choice;
+  const counts = p.options.map((_, i) => p.votes.filter((v) => v.choice === i));
+  const top = Math.max(0, ...counts.map((c) => c.length));
+  const canClose = !p.closed && (p.uid === state.me.id || isAdmin());
+  return `<div class="poll-q">📊 ${esc(p.question)}</div>
+    <div class="poll-opts">${p.options.map((o, i) => {
+      const n = counts[i].length, pct = total ? Math.round((n / total) * 100) : 0;
+      const win = p.closed && n === top && n > 0;
+      return `<button type="button" class="poll-opt ${mine === i ? "mine" : ""} ${win ? "win" : ""}" data-vote="${i}" ${p.closed ? "disabled" : ""}>
+        <span class="poll-fill" style="width:${pct}%"></span>
+        <span class="poll-label">${mine === i ? "✓ " : ""}${win ? "🏆 " : ""}${esc(o)}</span><span class="poll-pct">${total ? `${pct}%` : ""}</span>
+        ${n ? `<small class="poll-who">${counts[i].map((v) => esc(String(v.name || "").split(" ")[0])).join(", ")}</small>` : ""}
+      </button>`; }).join("")}</div>
+    <div class="poll-foot">${total} vote${total === 1 ? "" : "s"}${p.closed ? " · Final result" : mine == null ? " · Tap to vote" : " · Tap another to change"}${canClose ? ` · <button type="button" class="linkbtn" data-close-poll>Close poll</button>` : ""}</div>`;
+}
+function wirePoll(el) {
+  el.querySelectorAll("[data-vote]").forEach((b) => b.addEventListener("click", async () => {
+    try { await D.votePoll(state.me, el.dataset.poll, Number(b.dataset.vote)); } catch (e) { toast(D.authMessage(e), "bad"); }
+  }));
+  el.querySelector("[data-close-poll]")?.addEventListener("click", async () => {
+    if (!confirm("Close this poll? Nobody can vote after this.")) return;
+    try { await D.closePoll(el.dataset.poll); } catch (e) { toast(D.authMessage(e), "bad"); }
+  });
+}
+function watchPollCard(id) {
+  if (pollWatch.has(id)) return;
+  pollWatch.set(id, D.watchPoll(id, (p) => {
+    pollCache.set(id, p);
+    document.querySelectorAll(`[data-poll="${CSS.escape(id)}"]`).forEach((el) => { el.innerHTML = pollHtml(p); wirePoll(el); });
+  }, () => {}));
 }
 
 // ---------- chat attachments (kept in Firestore: photos are shrunk, other files up to ~700 KB) ----------

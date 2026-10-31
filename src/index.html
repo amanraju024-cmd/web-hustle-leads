@@ -454,6 +454,23 @@
   .att-file span:last-child { display: flex; flex-direction: column; min-width: 0; }
   .att-file b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .att-file small { color: var(--muted); font-size: 12px; }
+  .poll { width: min(320px, 100%); padding: 12px; border-radius: 16px; background: rgba(255,255,255,.05); border: 1px solid var(--border); margin-bottom: 4px; }
+  .poll-q { font-weight: 700; margin-bottom: 10px; line-height: 1.35; }
+  .poll-opts { display: flex; flex-direction: column; gap: 6px; }
+  .poll-opt { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 10px; width: 100%; text-align: left; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(0,0,0,.2); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; overflow: hidden; }
+  .poll-opt:disabled { cursor: default; }
+  .poll-opt:not(:disabled):hover { border-color: rgba(226,185,104,.5); }
+  .poll-opt.mine { border-color: var(--gold); }
+  .poll-opt.win { border-color: #7fd6a0; }
+  .poll-fill { position: absolute; inset: 0 auto 0 0; background: rgba(226,185,104,.18); transition: width .35s ease; pointer-events: none; }
+  .poll-opt.win .poll-fill { background: rgba(80,180,120,.22); }
+  .poll-label, .poll-pct, .poll-who { position: relative; }
+  .poll-pct { font-weight: 700; font-size: 13px; }
+  .poll-who { flex-basis: 100%; color: var(--muted); font-size: 11.5px; }
+  .poll-foot { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .poll-tpl { margin-bottom: 10px; }
+  .poll-opt-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .poll-opt-row input { flex: 1; }
   .att-full { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto 8px; border-radius: 10px; }
   .chat-form textarea { flex: 1; resize: none; min-height: 44px; max-height: 140px; border-radius: 22px; padding: 11px 16px; }
   .chat-form button { border-radius: 22px; min-height: 44px; }

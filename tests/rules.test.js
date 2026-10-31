@@ -557,3 +557,29 @@ test("team goal ladder: everyone active reads it, only admin sets it (max 5 leve
   await assertSucceeds(getDoc(doc(as("w1"), "settings/ladder")));
   await assertFails(getDoc(doc(as("off"), "settings/ladder")));
 });
+
+test("chat polls: admin creates with a message, one changeable vote each, closed polls are final", async () => {
+  const db = as("owner");
+  const poll = { uid: "owner", name: "Aman", question: "Which prize?", options: ["Lunch", "$20 each", "Night out"], closed: false, at: serverTimestamp() };
+  await assertFails(setDoc(doc(as("w1"), "polls/px"), { ...poll, uid: "w1", name: "Sam" }));       // workers can't start polls
+  const b = writeBatch(db);
+  b.set(doc(db, "polls/p1"), poll);
+  b.set(doc(db, "messages/m1"), { uid: "owner", name: "Aman", role: "admin", text: "", poll: { id: "p1" }, at: serverTimestamp() });
+  await assertSucceeds(b.commit());
+  await assertFails(setDoc(doc(db, "polls/p2"), { ...poll, options: ["Only one"] }));
+  await assertFails(setDoc(doc(db, "polls/p3"), { ...poll, options: ["a", "b", "c", "d", "e", "f", "g"] }));
+  await assertFails(setDoc(doc(db, "polls/p4"), { ...poll, options: ["ok", ""] }));
+  await assertFails(setDoc(doc(db, "polls/p5"), { ...poll, closed: true }));
+  await assertFails(setDoc(doc(as("w2"), "messages/m2"), { uid: "w2", name: "Jo", role: "worker", text: "", poll: { id: "p1" }, at: serverTimestamp() })); // not their poll
+  const vote = (uid, name, choice) => setDoc(doc(as(uid), `polls/p1/votes/${uid}`), { choice, name, at: serverTimestamp() });
+  await assertSucceeds(vote("w2", "Jo", 1));
+  await assertSucceeds(vote("w2", "Jo", 2));                                   // change vote
+  await assertFails(vote("w2", "Jo", 3));                                      // not an option
+  await assertFails(setDoc(doc(as("w2"), "polls/p1/votes/w1"), { choice: 0, name: "Sam", at: serverTimestamp() })); // vote for someone else
+  await assertFails(updateDoc(doc(as("w2"), "polls/p1"), { closed: true }));    // workers can't close it
+  await assertFails(updateDoc(doc(db, "polls/p1"), { question: "changed" }));
+  await assertSucceeds(updateDoc(doc(db, "polls/p1"), { closed: true }));
+  await assertFails(vote("w1", "Sam", 0));                                     // closed
+  await assertSucceeds(getDoc(doc(as("w2"), "polls/p1/votes/w2")));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "polls/p1")));
+});
