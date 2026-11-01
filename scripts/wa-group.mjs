@@ -39,10 +39,27 @@ async function resolveGroup() {
 }
 
 /** Sends one message to the team group. DRY_RUN / MAIL_LOG print instead. */
-export async function postToGroup(text) {
-  if (env.DRY_RUN || env.MAIL_LOG) { console.log(`---- WHATSAPP GROUP ----\n${text}\n`); return; }
-  await call("sendMessage", { chatId: await resolveGroup(), message: text.slice(0, 4000) });
+export const APP_URL = "https://armethods.web.app";
+const footer = "\n\n👉 Open the app: " + APP_URL;
+/** Sends one message to the team group, with a one-tap app link at the bottom (no big link preview). */
+export async function postToGroup(text, { link = true } = {}) {
+  const message = (text + (link && !text.includes(APP_URL) ? footer : "")).slice(0, 4000);
+  if (env.DRY_RUN || env.MAIL_LOG) { console.log(`---- WHATSAPP GROUP ----\n${message}\n`); return; }
+  await call("sendMessage", { chatId: await resolveGroup(), message, linkPreview: false });
 }
+
+/** The message to pin in the group: one-tap links into the app. */
+export const PIN_MESSAGE = [
+  "📌 *AR Methods team links* (pin this)",
+  "",
+  `📱 Team app: ${APP_URL}`,
+  `📞 My leads: ${APP_URL}/#leads`,
+  `🏆 Leaderboard & team goal: ${APP_URL}/#board`,
+  `💬 Team chat: ${APP_URL}/#chat`,
+  `📘 How it all works: ${APP_URL}/#start`,
+  "",
+  "Tip: open the team app in Safari or Chrome and tap Share → Add to Home Screen, so it's one tap away like a normal app.",
+].join("\n");
 
 const firstName = (n) => String(n || "").split(" ")[0] || "Someone";
 const plural = (n, w, p = w + "s") => `${n} ${n === 1 ? w : p}`;
@@ -344,9 +361,10 @@ export async function hourlyGroupUpdates(db, now = new Date()) {
 }
 
 // `node scripts/wa-group.mjs test` (the "WhatsApp group test" workflow): one message to prove the connection works
-if (import.meta.url === `file://${process.argv[1]}` && process.argv[2] === "test") {
+if (import.meta.url === `file://${process.argv[1]}` && ["test", "links"].includes(process.argv[2])) {
   if (!waConfigured()) { console.error("Missing GREEN_API_ID / GREEN_API_TOKEN secrets or WA_GROUP_NAME variable"); process.exit(1); }
-  postToGroup("✅ *AR Methods team updates are connected.*\nYou'll get the morning scoreboard at 7:30am, a midday check-in on weekdays, and shout-outs when deals are signed.")
+  (process.argv[2] === "links" ? postToGroup(PIN_MESSAGE, { link: false })
+    : postToGroup("✅ *AR Methods team updates are connected.*\nYou'll get the morning scoreboard at 7:30am, a midday check-in on weekdays, and shout-outs when deals are signed."))
     .then(() => console.log(`posted to "${process.env.WA_GROUP_NAME || process.env.WA_GROUP_ID}"`))
     .catch((e) => { console.error(e.message); process.exit(1); });
 }

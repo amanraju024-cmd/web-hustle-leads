@@ -2,6 +2,12 @@ name: WhatsApp group test
 
 on:
   workflow_dispatch:   # Actions → "WhatsApp group test" → Run workflow
+    inputs:
+      message:
+        description: "What to send"
+        type: choice
+        options: [test, links]
+        default: test
 
 jobs:
   test:
@@ -13,10 +19,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Send a test message to the team group
+      - name: Send the message to the team group
         env:
           GREEN_API_ID: ${{ secrets.GREEN_API_ID }}
           GREEN_API_TOKEN: ${{ secrets.GREEN_API_TOKEN }}
           GREEN_API_URL: ${{ vars.GREEN_API_URL }}
           WA_GROUP_NAME: ${{ vars.WA_GROUP_NAME }}
-        run: node scripts/wa-group.mjs test
+        run: node scripts/wa-group.mjs ${{ inputs.message || 'test' }}
