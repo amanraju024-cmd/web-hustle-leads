@@ -66,6 +66,10 @@ export async function buildBrief(now = new Date()) {
   const deals = wonCalls.filter((c) => c.day === day && c.value > 0);
   // 🌐 website enquiries yesterday + 📧 automatic follow-ups
   const dayStart = new Date(`${day}T00:00:00+08:00`), dayEnd = new Date(`${today}T00:00:00+08:00`);
+  const dmLeads = await db.collection("leads").where("dm.status", "in", ["sent", "replied", "interested", "won", "no"]).get().then((q) => q.docs.map((d) => d.data().dm)).catch(() => []);
+  const dmSentY = dmLeads.filter((d) => ms(d.sentAt) >= dayStart.getTime() && ms(d.sentAt) < dayEnd.getTime()).length;
+  const dmReplies = dmLeads.filter((d) => ["replied", "interested", "won"].includes(d.status)).length;
+  const dmLine = dmLeads.length ? `• DMs: ${dmSentY} sent yesterday · ${dmReplies} replies from ${dmLeads.length} sent so far` : "";
   const [enqY, enqOpen, fuOn, fuReplied] = await Promise.all([
     db.collection("enquiries").where("createdAt", ">=", dayStart).where("createdAt", "<", dayEnd).get().then((q) => q.size).catch(() => 0),
     db.collection("enquiries").where("status", "==", "new").get().then((q) => q.size).catch(() => 0),
@@ -108,6 +112,7 @@ export async function buildBrief(now = new Date()) {
     `• Care plans: ${money(care.mrr)}/month from ${care.active} client${care.active === 1 ? "" : "s"}${careToday.length ? `, ${careToday.length} payment${careToday.length === 1 ? "" : "s"} due today` : ""}`,
     rewardsOwed ? `• Referral rewards to pay: ${money(rewardsOwed * REFERRAL_REWARD)}` : "",
     `• Website enquiries: ${enqY} yesterday${enqOpen ? `, ${enqOpen} waiting in Admin` : ""}`,
+    dmLine,
     `• Auto follow-ups running: ${fuOn}${fuReplied.length ? ` · replied yesterday: ${fuReplied.join(", ")} (check your inbox)` : ""}`,
     "",
     "Open the app: https://armethods.web.app",

@@ -6,7 +6,7 @@ import { OWNER_EMAIL, TOMTOM_KEY, GOOGLE_MAPS_KEY, BRAND_LINK, BRAND_PHONE, PAGE
 import {
   scriptFor, OBJECTIONS, AFTER_WON, BADGES, totalsFrom, earnedBadges, newBadges, weeklyReport, money, pct,
   commissionFor, NFC, BRAND, signature, textsFor, creditHtml, leadScore, isHot, bestHours, hourLabel, CARE_DEFAULT, CARE_PRESETS, DEFAULT_PACKAGES, REFERRAL_REWARD, careStats, monthsBilled, PAY_STEPS, payOf, payLabel, commissionSplit,
-  LADDER_METRICS, DEFAULT_LADDER, teamTotals, ladderProgress, ladderUnit,
+  LADDER_METRICS, DEFAULT_LADDER, teamTotals, ladderProgress, ladderUnit, dmFor, socialOf,
 } from "./extras.js";
 import {
   esc, safeUrl, perthDay, weekStart, addDays, prettyDay, fmtTime, fmtDateTime, toDate,
@@ -610,9 +610,9 @@ async function route() {
   const [name, arg] = (location.hash.replace(/^#\/?/, "") || "home").split("/");
   const routes = {
     home: screenHome, find: screenFind, leads: screenLeads, board: screenBoard, account: screenAccount, lockin: screenLockin, reviews: screenReviews, chat: screenChat, start: screenStart,
-    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, brand: screenBrand, care: screenCare, packages: screenPackages, referrals: screenReferrals,
+    admin: screenAdmin, worker: screenWorker, pool: screenPool, team: screenTeam, report: screenReport, dms: screenDms, brand: screenBrand, care: screenCare, packages: screenPackages, referrals: screenReferrals,
   };
-  const adminOnly = ["admin", "worker", "pool", "team", "report", "brand", "care", "packages", "referrals"];
+  const adminOnly = ["admin", "worker", "pool", "team", "report", "dms", "brand", "care", "packages", "referrals"];
   let fn = routes[name] || screenHome;
   // new workers land on the Start here guide the first time they open the app
   if (!isAdmin() && (name === "home" || !routes[name]) && !startProgress().seen) { location.replace("#start"); return; }
@@ -1654,9 +1654,113 @@ function screenAccount() {
 // =====================================================================
 // Admin: overview
 // =====================================================================
+// =====================================================================
+// DMs (admin): message businesses that only have Instagram/Facebook. Sent by hand (Meta bans DM bots).
+// Only pool leads and the admin's own leads, so nobody DMs a business a worker is calling.
+// =====================================================================
+const DM_LABEL = { sent: "Sent", replied: "Replied", interested: "Interested", won: "Won", no: "Not interested" };
+function screenDms() {
+  setTitle("DMs");
+  let tab = sessionStorage.getItem("arm_dm_tab") || "todo";
+  view().innerHTML = `${adminNav("dms")}
+    <h1 class="page">DMs</h1>
+    <p class="muted">Message businesses that only have Instagram or Facebook. Tap <b>Copy &amp; open</b>, paste, send, then tap <b>Sent</b>. About 15 seconds each.</p>
+    <div id="dmStats"></div>
+    <div class="chips" id="dmTabs"></div>
+    <div id="dmList"><div class="loading"><span class="spinner"></span></div></div>
+    <p class="muted small">Need more? Search in <b>Find leads</b>, tap the <b>Social/booking page only</b> filter, then <b>Add all shown to pool</b>. Keep it to about 30–50 DMs a day so Instagram doesn't flag your account.</p>`;
+  let leads = [];
+  const now = Date.now(), DAY = 864e5;
+  const mineOrPool = (l) => !l.assignedTo || l.assignedTo === state.me.id;
+  const open = (l) => !["Won", "Not interested"].includes(l.status);
+  const groups = {
+    todo: { label: "To message", f: (l) => !l.dm && socialOf(l.website) },
+    find: { label: "Find their socials", f: (l) => !l.dm && l.websiteKind === "none" },
+    follow: { label: "Follow up", f: (l) => l.dm?.status === "sent" && !l.dm.followedUp && now - (l.dm.sentAt?.toMillis?.() || now) > 3 * DAY },
+    sent: { label: "Sent", f: (l) => l.dm?.status === "sent" },
+    replied: { label: "Replied", f: (l) => ["replied", "interested"].includes(l.dm?.status) },
+    done: { label: "Done", f: (l) => ["won", "no"].includes(l.dm?.status) },
+  };
+  const card = (l) => {
+    const plat = socialOf(l.website);
+    const f = l.dm?.status === "sent" && tab === "follow";
+    const msg = dmFor(l, f);
+    const actions = tab === "find"
+      ? `<a class="ghost small btn-link" target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent(`${l.name} ${l.suburb || ""} instagram`)}">🔎 Find on Google</a>
+         <div class="inline wide"><input data-social placeholder="Paste their Instagram or Facebook link" aria-label="Instagram or Facebook link"><button class="ghost small" data-save-social>Save</button></div>`
+      : !l.dm || f
+        ? `<button class="primary small" data-copy>📋 Copy &amp; open ${esc(plat || "profile")}</button><button class="ghost small" data-sent>${f ? "Followed up ✓" : "Sent ✓"}</button>`
+        : l.dm.status === "sent"
+          ? `<button class="ghost small" data-st="replied">💬 They replied</button><button class="linkbtn" data-st="no">No / not interested</button>`
+          : l.dm.status === "replied"
+            ? `<button class="primary small" data-st="interested">🔥 Interested</button><button class="linkbtn" data-st="no">Not interested</button>`
+            : l.dm.status === "interested"
+              ? `<button class="primary small" data-mine>Add to my leads</button><button class="ghost small" data-st="won">💰 Won</button><button class="linkbtn" data-st="no">Lost</button>`
+              : `<span class="muted small">${esc(DM_LABEL[l.dm.status] || "")}</span>`;
+    return `<article class="lead dm-card" data-id="${esc(l.id)}">
+      <div class="lead-main">
+        <h3>${esc(l.name)} ${plat ? `<span class="badge social">${esc(plat)}</span>` : ""} ${l.dm ? `<span class="status s-${esc(l.dm.status)}">${esc(DM_LABEL[l.dm.status])}</span>` : ""}</h3>
+        <p class="muted">${esc(l.category || "")}${l.suburb ? " · " + esc(l.suburb) : ""}${l.rating ? ` · ★ ${Number(l.rating).toFixed(1)} (${Number(l.reviews) || 0})` : ""}${l.dm?.sentAt ? ` · sent ${esc(fmtDateTime(l.dm.sentAt))}` : ""}</p>
+        ${tab === "todo" || f ? `<p class="dm-msg">${esc(msg)}</p>` : ""}
+        <div class="toolbar">${actions}</div>
+      </div></article>`;
+  };
+  const draw = () => {
+    const pool = leads.filter((l) => mineOrPool(l) && open(l));
+    const all = leads.filter(mineOrPool);
+    const counts = Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, (k === "done" || k === "replied" ? all : pool).filter(g.f).length]));
+    const today = perthDay();
+    const sentToday = all.filter((l) => l.dm?.sentAt && perthDay(toDate(l.dm.sentAt)) === today).length;
+    const replies = all.filter((l) => ["replied", "interested", "won"].includes(l.dm?.status)).length;
+    const sentAll = all.filter((l) => l.dm).length;
+    $("#dmStats").innerHTML = `<section class="tiles"><div class="tile"><span>Sent today</span><b class="num">${sentToday}</b></div>
+      <div class="tile"><span>Total sent</span><b class="num">${sentAll}</b></div>
+      <div class="tile"><span>Replies</span><b class="num">${replies}</b><small>${sentAll ? Math.round((replies / sentAll) * 100) + "% reply rate" : ""}</small></div>
+      <div class="tile"><span>Won from DMs</span><b class="num">${all.filter((l) => l.dm?.status === "won").length}</b></div></section>`;
+    $("#dmTabs").innerHTML = Object.entries(groups).map(([k, g]) => `<button class="chip ${tab === k ? "on" : ""}" data-dmtab="${k}">${g.label} (${counts[k]})</button>`).join("");
+    $("#dmTabs").querySelectorAll("[data-dmtab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.dmtab; try { sessionStorage.setItem("arm_dm_tab", tab); } catch {} draw(); }));
+    const list = (tab === "done" || tab === "replied" ? all : pool).filter(groups[tab].f).sort((a, b) => (b.reviews || 0) - (a.reviews || 0)).slice(0, 60);
+    const empty = { todo: "Nobody left to message. Add more from Find leads (Social/booking page only filter → Add all shown to pool).", find: "No leads without a website in the pool right now.", follow: "No follow-ups due. They show up here 3 days after a DM with no reply.", sent: "No DMs waiting on a reply.", replied: "No replies yet. Keep sending, it's a numbers game.", done: "Nothing finished yet." };
+    $("#dmList").innerHTML = list.length ? `<div class="list">${list.map(card).join("")}</div>` : `<div class="empty">${empty[tab]}</div>`;
+    $("#dmList").querySelectorAll(".dm-card").forEach((el) => {
+      const l = leads.find((x) => x.id === el.dataset.id);
+      const f = tab === "follow";
+      el.querySelector("[data-copy]")?.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(dmFor(l, f)); toast("Message copied. Paste it in their DMs."); } catch { toast("Couldn't copy. Long-press the message to copy it.", "bad"); }
+        window.open(l.website, "_blank", "noopener");
+      });
+      el.querySelector("[data-sent]")?.addEventListener("click", async (e) => {
+        await busy(e.currentTarget, "Saving", async () => {
+          try { await (f ? D.dmFollowedUp(l.id) : D.startDm(state.me, l.id)); toast(f ? "Follow-up logged" : "Logged. Follow-up reminder in 3 days."); }
+          catch (err) { toast(D.authMessage(err), "bad"); }
+        });
+      });
+      el.querySelectorAll("[data-st]").forEach((b) => b.addEventListener("click", async () => {
+        try { await D.setDmStatus(l.id, b.dataset.st); if (b.dataset.st === "won") confetti(); }
+        catch (err) { toast(D.authMessage(err), "bad"); }
+      }));
+      el.querySelector("[data-mine]")?.addEventListener("click", async (e) => {
+        await busy(e.currentTarget, "Adding", async () => {
+          try { await D.assignLeads(state.me, [l.id], state.me); toast(`${l.name} is in your leads. Log the sale there when they buy.`); }
+          catch (err) { toast(D.authMessage(err), "bad"); }
+        });
+      });
+      el.querySelector("[data-save-social]")?.addEventListener("click", async (e) => {
+        const url = el.querySelector("[data-social]").value.trim();
+        if (!socialOf(url)) return toast("Paste an Instagram or Facebook link", "bad");
+        await busy(e.currentTarget, "Saving", async () => {
+          try { await D.setLeadSocial(l.id, /^https?:\/\//.test(url) ? url : "https://" + url); toast("Saved. It's now in To message."); }
+          catch (err) { toast(D.authMessage(err), "bad"); }
+        });
+      });
+    });
+  };
+  state.unsub.push(D.watchAllLeads((rows) => { leads = rows; if ($("#dmList")) draw(); }, (e) => { $("#dmList").innerHTML = errorBox(D.authMessage(e)); }));
+}
+
 function adminNav(active) {
   return `<div class="subnav">
-    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["care", "Care plans"], ["referrals", "Referrals"], ["packages", "Packages"], ["team", "Team"], ["brand", "Brand kit"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
+    ${[["admin", "Overview"], ["report", "Weekly report"], ["pool", "Leads"], ["dms", "DMs"], ["care", "Care plans"], ["referrals", "Referrals"], ["packages", "Packages"], ["team", "Team"], ["brand", "Brand kit"]].map(([id, l]) => `<a href="#${id}" class="${active === id ? "on" : ""}">${l}</a>`).join("")}
   </div>`;
 }
 

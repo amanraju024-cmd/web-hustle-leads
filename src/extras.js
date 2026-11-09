@@ -347,3 +347,29 @@ export function ladderProgress(levels, totals) {
     return { ...l, n: i + 1, value, pct: Math.min(100, Math.round((value / Math.max(1, l.target)) * 100)), unlocked, current, locked: !unlocked && !current };
   });
 }
+
+// =====================================================================
+// Instagram / Facebook DMs (admin "DMs" page). Sent by hand, never automated:
+// Meta bans accounts that bot-DM businesses. Three variants rotate so messages don't look copy-pasted.
+// =====================================================================
+const DM_WHAT = { beauty: "book in with you", food: "check your menu and hours", trades: "call you for a job", health: "book an appointment", other: "find out what you do" };
+const DM_PEOPLE = { beauty: "salons", food: "cafés", trades: "tradies", health: "clinics", other: "local businesses" };
+export function socialOf(url) {
+  const u = String(url || "").toLowerCase();
+  return /instagram\.com/.test(u) ? "Instagram" : /(facebook\.com|fb\.com|fb\.me)/.test(u) ? "Facebook" : "";
+}
+export function dmFor(lead, followUp = false) {
+  const g = groupOf(lead.category);
+  const sub = lead.suburb || "Perth";
+  const name = lead.name;
+  const where = socialOf(lead.website) || "socials";
+  if (followUp) return `Hey, just bumping this in case it got buried. Happy to send through a couple of examples and the price for ${name}, no pressure either way. armethods.com`;
+  const variants = [
+    `Hey! Love what you're doing with ${name}. Quick one: when people in ${sub} Google you, there's no website for them to land on, so it's harder for them to ${DM_WHAT[g]}. We build simple websites for Perth ${DM_PEOPLE[g]} from $500, all written for you. Here's our work: armethods.com. Keen to see what yours could look like?`,
+    `Hi ${name} team 👋 We're a small web design studio in Perth. Noticed you're only on socials at the moment. A proper website helps people who Google you in ${sub} actually ${DM_WHAT[g]}. Sites start at $500, one-off, and we handle everything. Want me to send a couple of examples?`,
+    `Hey, hope business is going well! We help ${DM_PEOPLE[g]} around ${sub} get a simple website so they show up on Google, not just ${where}. From $500 and no tech work on your end. You can see some of our sites at armethods.com. Would that be useful for ${name}?`,
+  ];
+  const h = [...String(lead.id || name)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7);
+  return variants[Math.abs(h) % variants.length];
+}
+export { groupOf };

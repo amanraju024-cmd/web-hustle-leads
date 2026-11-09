@@ -389,6 +389,12 @@ export function watchPresence(cb, onErr) {
   }, onErr);
 }
 
+// ---------- Instagram / Facebook DM outreach (admin) ----------
+export const startDm = (me, leadId) => updateDoc(doc(db, "leads", leadId), { dm: { status: "sent", sentAt: serverTimestamp(), by: me.id }, updatedAt: serverTimestamp() });
+export const setDmStatus = (leadId, status) => updateDoc(doc(db, "leads", leadId), { "dm.status": status, [`dm.${status}At`]: serverTimestamp(), updatedAt: serverTimestamp() });
+export const dmFollowedUp = (leadId) => updateDoc(doc(db, "leads", leadId), { "dm.followedUp": true, "dm.followedUpAt": serverTimestamp(), updatedAt: serverTimestamp() });
+export const setLeadSocial = (leadId, url) => updateDoc(doc(db, "leads", leadId), { website: url, websiteKind: "social", updatedAt: serverTimestamp() });
+
 // ---------- team goal ladder ----------
 export async function getLadder() {
   const snap = await getDoc(doc(db, "settings", "ladder"));
